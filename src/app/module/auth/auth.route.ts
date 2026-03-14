@@ -22,5 +22,6 @@ router.get(
     checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
     authController.getMe,
 );
+router.post("/verify-email", authController.verifyEmail);
 
 export const authRoutes = router;

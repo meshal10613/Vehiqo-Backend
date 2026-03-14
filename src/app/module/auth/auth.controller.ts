@@ -54,20 +54,36 @@ const loginUser = catchAsync(
     },
 );
 
-const getMe = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-	const user = req.user;
-	const result = await authService.getMe(user);
+const getMe = catchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const user = req.user;
+        const result = await authService.getMe(user);
 
-	sendResponse(res, {
-		httpStatusCode: status.OK,
-		success: true,
-		message: "User fetched successfully",
-		data: result,
-	})
-});
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "User fetched successfully",
+            data: result,
+        });
+    },
+);
+
+const verifyEmail = catchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const { email, otp } = req.body;
+        await authService.verifyEmail(email, otp);
+
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "Email verified successfully",
+        });
+    },
+);
 
 export const authController = {
     registerUser,
     loginUser,
-	getMe,
+    getMe,
+    verifyEmail,
 };

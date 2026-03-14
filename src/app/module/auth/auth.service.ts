@@ -107,4 +107,52 @@ const getMe = async (user: IRequestUser) => {
     return isUserExist;
 };
 
-export const authService = { registerUser, loginUser, getMe };
+const verifyEmail = async (email: string, otp: string) => {
+    const user = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+    });
+
+    if (!user) {
+        throw new AppError(status.NOT_FOUND, "User not found.");
+    }
+
+    // Check if user has a credentials/password account
+    const passwordAccount = await prisma.account.findFirst({
+        where: {
+            userId: user.id,
+            providerId: "credential", // adjust if your auth uses another name
+        },
+    });
+
+    if (!passwordAccount) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "Email verification is not allowed for social login accounts.",
+        );
+    }
+
+    const result = await auth.api.verifyEmailOTP({
+        body: {
+            email,
+            otp,
+        },
+    });
+
+    if (!result?.user) {
+        throw new AppError(status.BAD_REQUEST, "Invalid OTP.");
+    }
+
+    if (result.status && !result.user.emailVerified) {
+        await prisma.user.update({
+            where: {
+                email,
+            },
+            data: {
+                emailVerified: true,
+            },
+        });
+    }
+};
+
+export const authService = { registerUser, loginUser, getMe, verifyEmail };
