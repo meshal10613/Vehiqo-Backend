@@ -10,7 +10,7 @@ const registerUser = catchAsync(
         const result = await authService.registerUser(payload);
         // const { accessToken, refreshToken, token, ...rest } = result;
         const data = result;
-
+		
         // tokenUtils.setAccessTokenCookie(res, accessToken);
         // tokenUtils.setRefreshTokenCookie(res, refreshToken);
         // tokenUtils.setBetterAuthSessionCookie(res, token as string);
