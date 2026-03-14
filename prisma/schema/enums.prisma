@@ -12,11 +12,11 @@ enum Transmission {
 
 enum Fuel {
     PETROL
+    OCTANE
     DIESEL
     ELECTRIC
     HYBRID
     CNG
-    HUMAN_POWERED
 }
 
 enum VehicleStatus {
@@ -30,5 +30,4 @@ enum Unit {
     LITRE
     KWH
     CUBIC_METRE
-    NONE
 }

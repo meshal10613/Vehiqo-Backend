@@ -3,11 +3,11 @@ import { Fuel, Unit } from "../../../generated/prisma/enums";
 
 const FUEL_UNIT_MAP: Record<Fuel, Unit> = {
     [Fuel.PETROL]: Unit.LITRE,
+    [Fuel.OCTANE]: Unit.LITRE,
     [Fuel.DIESEL]: Unit.LITRE,
     [Fuel.HYBRID]: Unit.LITRE,
     [Fuel.CNG]: Unit.CUBIC_METRE,
     [Fuel.ELECTRIC]: Unit.KWH,
-    [Fuel.HUMAN_POWERED]: Unit.NONE,
 };
 
 export const createFuelPriceSchema = z
