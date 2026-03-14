@@ -20,6 +20,8 @@ model Vehicle {
     vehicleTypeId String
     vehicleType   VehicleType @relation(fields: [vehicleTypeId], references: [id])
 
+    fuel FuelPrice @relation(fields: [fuelType], references: [fuelType], onDelete: Cascade)
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 }

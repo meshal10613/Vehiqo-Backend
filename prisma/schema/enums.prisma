@@ -29,5 +29,6 @@ enum VehicleStatus {
 enum Unit {
     LITRE
     KWH
+    CUBIC_METRE
     NONE
 }
