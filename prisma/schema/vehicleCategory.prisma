@@ -1,7 +1,7 @@
 model VehicleCategory {
     id          String  @id @default(uuid(7))
     name        String  @unique
-    image        String?
+    image       String?
     description String?
 
     types VehicleType[]
