@@ -1,0 +1,13 @@
+model VehicleType {
+  id              String  @id @default(uuid())
+  name            String  @unique
+  image           String?
+  isElectric      Boolean @default(false)
+  requiresLicense Boolean @default(true)
+  requiresFuel    Boolean @default(true)
+
+  categoryId String
+  category   VehicleCategory @relation(fields: [categoryId], references: [id])
+
+  vehicles Vehicle[]
+}

@@ -1,0 +1,28 @@
+enum Transmission {
+    MANUAL
+    AUTOMATIC
+    SEMI_AUTOMATIC
+    NONE
+}
+
+enum Fuel {
+    PETROL
+    DIESEL
+    ELECTRIC
+    HYBRID
+    CNG
+    HUMAN_POWERED
+}
+
+enum VehicleStatus {
+    AVAILABLE
+    RENTED
+    MAINTENANCE
+    RETIRED
+}
+
+enum Unit {
+    LITRE
+    KWH
+    NONE
+}

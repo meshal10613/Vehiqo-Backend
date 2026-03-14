@@ -1,0 +1,25 @@
+model Vehicle {
+    id           String        @id @default(uuid())
+    brand        String
+    model        String
+    year         Int
+    plateNo      String        @unique
+    color        String?
+    transmission Transmission
+    seats        Int?
+    fuelType     Fuel
+    pricePerDay  Float
+    mileage      Float?
+    range        Float?
+    engineCC     Int?
+    status       VehicleStatus @default(AVAILABLE)
+    description  String?
+    features     String[]
+    image        String[]
+
+    vehicleTypeId String
+    vehicleType   VehicleType @relation(fields: [vehicleTypeId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}

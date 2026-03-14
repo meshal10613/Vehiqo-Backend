@@ -1,0 +1,8 @@
+model FuelPrice {
+    id           String   @id @default(uuid())
+    fuelType     Fuel
+    pricePerUnit Float
+	unit String
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+}
