@@ -4,6 +4,7 @@ import { sendResponse } from "../../shared/sendResponse";
 import status from "http-status";
 import { authService } from "./auth.service";
 import { tokenUtils } from "../../utils/token";
+import { IRequestUser } from "../../interface/requestUser.interface";
 
 const registerUser = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
@@ -53,7 +54,20 @@ const loginUser = catchAsync(
     },
 );
 
+const getMe = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+	const user = req.user;
+	const result = await authService.getMe(user);
+
+	sendResponse(res, {
+		httpStatusCode: status.OK,
+		success: true,
+		message: "User fetched successfully",
+		data: result,
+	})
+});
+
 export const authController = {
     registerUser,
     loginUser,
+	getMe,
 };
