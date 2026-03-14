@@ -24,4 +24,10 @@ router.get(
 );
 router.post("/verify-email", authController.verifyEmail);
 
+router.post(
+    "/logout",
+    checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
+    authController.logoutUser,
+);
+
 export const authRoutes = router;
