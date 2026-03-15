@@ -22,7 +22,11 @@ router.get(
     checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
     authController.getMe,
 );
-router.post("/verify-email", authController.verifyEmail);
+router.post(
+    "/change-password",
+    checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
+    authController.changePassword,
+);
 
 router.patch(
     "/update-profile",
@@ -30,6 +34,10 @@ router.patch(
     validateRequest(authValidation.updateUserSchema),
     authController.updateUser,
 );
+
+router.post("/verify-email", authController.verifyEmail);
+router.post("/forget-password", authController.forgetPassword);
+router.post("/reset-password", authController.resetPassword);
 
 router.post(
     "/logout",

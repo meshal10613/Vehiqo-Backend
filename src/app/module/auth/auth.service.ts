@@ -2,6 +2,7 @@ import status from "http-status";
 import AppError from "../../errorHelper/AppError";
 import { auth } from "../../lib/auth";
 import {
+    IChangePasswordPayload,
     ILoginUserPayload,
     IRegisterUserPayload,
     IUpdateUserPayload,
@@ -112,6 +113,114 @@ const getMe = async (user: IRequestUser) => {
     return isUserExist;
 };
 
+const changePassword = async (
+    payload: IChangePasswordPayload,
+    sessionToken: string,
+) => {
+    const session = await auth.api.getSession({
+        headers: new Headers({
+            Authorization: `Bearer ${sessionToken}`,
+        }),
+    });
+
+    if (!session) {
+        throw new AppError(status.UNAUTHORIZED, "Invalid session token");
+    }
+
+    const isGoogleAccount = await prisma.account.count({
+        where: {
+            userId: session.user.id,
+            providerId: "google",
+        },
+    });
+
+    if (isGoogleAccount > 0) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "Password cannot be changed for Google accounts.",
+        );
+    }
+
+    const { currentPassword, newPassword } = payload;
+
+    const result = await auth.api.changePassword({
+        body: {
+            currentPassword,
+            newPassword,
+            revokeOtherSessions: true,
+        },
+        headers: new Headers({
+            Authorization: `Bearer ${sessionToken}`,
+        }),
+    });
+
+    const accessToken = tokenUtils.getAccessToken({
+        userId: session.user.id,
+        role: session.user.role,
+        name: session.user.name,
+        email: session.user.email,
+        isDeleted: session.user.isDeleted,
+        emailVerified: session.user.emailVerified,
+    });
+
+    const refreshToken = tokenUtils.getRefreshToken({
+        userId: session.user.id,
+        role: session.user.role,
+        name: session.user.name,
+        email: session.user.email,
+        isDeleted: session.user.isDeleted,
+        emailVerified: session.user.emailVerified,
+    });
+
+    return {
+        ...result,
+        accessToken,
+        refreshToken,
+    };
+};
+
+const updateUser = async (payload: IUpdateUserPayload, user: IRequestUser) => {
+    const isExist = await prisma.user.findUnique({
+        where: { id: user.userId },
+    });
+
+    if (!isExist) {
+        throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    // Only the owner can update their profile
+    if (isExist.email !== user.email || isExist.role !== user.role) {
+        throw new AppError(
+            status.FORBIDDEN,
+            "You are not allowed to update this user",
+        );
+    }
+
+    // If new image is coming and old image exists → delete old from Cloudinary
+    if (payload.image && isExist.image) {
+        await deleteFileFromCloudinary(isExist.image);
+    }
+
+    const result = await prisma.user.update({
+        where: { id: user.userId },
+        data: payload,
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            mobileNumber: true,
+            licenseNumber: true,
+            nidNumber: true,
+            role: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+    });
+
+    return result;
+};
+
 const verifyEmail = async (email: string, otp: string) => {
     const user = await prisma.user.findUnique({
         where: { email },
@@ -160,46 +269,91 @@ const verifyEmail = async (email: string, otp: string) => {
     }
 };
 
-const updateUser = async (payload: IUpdateUserPayload, user: IRequestUser) => {
-    const isExist = await prisma.user.findUnique({
-        where: { id: user.userId },
-    });
-
-    if (!isExist) {
-        throw new AppError(status.NOT_FOUND, "User not found");
-    }
-
-    // Only the owner can update their profile
-    if (isExist.email !== user.email || isExist.role !== user.role) {
-        throw new AppError(
-            status.FORBIDDEN,
-            "You are not allowed to update this user",
-        );
-    }
-
-    // If new image is coming and old image exists → delete old from Cloudinary
-    if (payload.image && isExist.image) {
-        await deleteFileFromCloudinary(isExist.image);
-    }
-
-    const result = await prisma.user.update({
-        where: { id: user.userId },
-        data: payload,
+const forgetPassword = async (email: string) => {
+    const user = await prisma.user.findUnique({
+        where: { email },
         select: {
             id: true,
-            name: true,
-            email: true,
-            image: true,
-            mobileNumber: true,
-            licenseNumber: true,
-            nidNumber: true,
-            role: true,
-            createdAt: true,
-            updatedAt: true,
+            emailVerified: true,
+            isDeleted: true,
         },
     });
 
-    return result;
+    if (!user || user.isDeleted) {
+        throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    const passwordAccount = await prisma.account.findFirst({
+        where: {
+            userId: user.id,
+            providerId: "credential",
+        },
+        select: { id: true },
+    });
+
+    if (!passwordAccount) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "Password reset is not available for social login accounts.",
+        );
+    }
+
+    if (!user.emailVerified) {
+        throw new AppError(status.BAD_REQUEST, "Email not verified");
+    }
+
+    await auth.api.requestPasswordResetEmailOTP({
+        body: { email },
+    });
+};
+
+const resetPassword = async (
+    email: string,
+    otp: string,
+    newPassword: string,
+) => {
+    const isUserExist = await prisma.user.findUnique({
+        where: {
+            email,
+        },
+    });
+
+    if (!isUserExist || isUserExist.isDeleted) {
+        throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    if (!isUserExist.emailVerified) {
+        throw new AppError(status.BAD_REQUEST, "Email not verified");
+    }
+
+    const passwordAccount = await prisma.account.findFirst({
+        where: {
+            userId: isUserExist.id,
+            providerId: "credential",
+        },
+        select: { id: true },
+    });
+
+    if (!passwordAccount) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "Password reset is not available for social login accounts.",
+        );
+    }
+
+    await auth.api.resetPasswordEmailOTP({
+        body: {
+            email,
+            otp,
+            password: newPassword,
+        },
+    });
+
+    await prisma.session.deleteMany({
+        where: {
+            userId: isUserExist.id,
+        },
+    });
 };
 
 const logoutUser = async (sessionToken: string) => {
@@ -216,7 +370,10 @@ export const authService = {
     registerUser,
     loginUser,
     getMe,
-    verifyEmail,
+    changePassword,
     updateUser,
+    verifyEmail,
+    forgetPassword,
+    resetPassword,
     logoutUser,
 };

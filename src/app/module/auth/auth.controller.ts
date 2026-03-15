@@ -68,15 +68,26 @@ const getMe = catchAsync(
     },
 );
 
-const verifyEmail = catchAsync(
+const changePassword = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
-        const { email, otp } = req.body;
-        await authService.verifyEmail(email, otp);
+        const payload = req.body;
+        const betterAuthSessionToken = req.cookies["better-auth.session_token"];
+        const result = await authService.changePassword(
+            payload,
+            betterAuthSessionToken,
+        );
+
+        const { accessToken, refreshToken, token } = result;
+
+        tokenUtils.setAccessTokenCookie(res, accessToken);
+        tokenUtils.setRefreshTokenCookie(res, refreshToken);
+        tokenUtils.setBetterAuthSessionCookie(res, token as string);
 
         sendResponse(res, {
             httpStatusCode: status.OK,
             success: true,
-            message: "Email verified successfully",
+            message: "Password changed successfully",
+            data: result,
         });
     },
 );
@@ -98,6 +109,45 @@ const updateUser = catchAsync(
             success: true,
             message: "User updated successfully",
             data: result,
+        });
+    },
+);
+
+const verifyEmail = catchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const { email, otp } = req.body;
+        await authService.verifyEmail(email, otp);
+
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "Email verified successfully",
+        });
+    },
+);
+
+const forgetPassword = catchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const { email } = req.body;
+        await authService.forgetPassword(email);
+
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "Password reset OTP sent to email successfully",
+        });
+    },
+);
+
+const resetPassword = catchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const { email, otp, newPassword } = req.body;
+        await authService.resetPassword(email, otp, newPassword);
+
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "Password reset successfully",
         });
     },
 );
@@ -135,7 +185,10 @@ export const authController = {
     registerUser,
     loginUser,
     getMe,
-    verifyEmail,
+    changePassword,
     updateUser,
+    verifyEmail,
+    forgetPassword,
+    resetPassword,
     logoutUser,
 };

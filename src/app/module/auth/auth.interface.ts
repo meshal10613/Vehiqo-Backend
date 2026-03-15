@@ -16,3 +16,8 @@ export interface IUpdateUserPayload {
     licenseNumber?: string;
     nidNumber?: string;
 }
+
+export interface IChangePasswordPayload {
+    currentPassword: string;
+    newPassword: string;
+}
