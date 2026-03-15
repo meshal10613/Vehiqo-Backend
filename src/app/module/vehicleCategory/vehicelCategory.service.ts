@@ -81,11 +81,14 @@ const deleteVehicleCategory = async (id: string) => {
         throw new AppError(status.NOT_FOUND, "Vehicle category not found");
     }
 
-    const result = await prisma.vehicleCategory.delete({
+    // Delete image from Cloudinary if exists
+    if (isExist.image) {
+        await deleteFileFromCloudinary(isExist.image);
+    }
+
+    await prisma.vehicleCategory.delete({
         where: { id },
     });
-
-    return result;
 };
 
 export const vehicleCategoryService = {

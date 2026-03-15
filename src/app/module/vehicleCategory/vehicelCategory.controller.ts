@@ -70,7 +70,7 @@ const updateVehicleCategory = catchAsync(async (req, res) => {
 const deleteVehicleCategory = catchAsync(async (req, res) => {
     const { id } = req.params;
 
-    const result = await vehicleCategoryService.deleteVehicleCategory(
+    await vehicleCategoryService.deleteVehicleCategory(
         id as string,
     );
 
@@ -78,7 +78,6 @@ const deleteVehicleCategory = catchAsync(async (req, res) => {
         httpStatusCode: status.OK,
         success: true,
         message: "Vehicle category deleted successfully",
-        data: result,
     });
 });
 
