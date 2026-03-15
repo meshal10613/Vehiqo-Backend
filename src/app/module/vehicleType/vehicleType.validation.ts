@@ -11,15 +11,6 @@ export const createVehicleTypeSchema = z
             .trim()
             .transform((val) => val.replace(/\s+/g, " ")),
 
-        image: z
-            .string({
-                message: "Image must be a string",
-            })
-            .url({
-                message: "Image must be a valid URL",
-            })
-            .optional(),
-
         isElectric: z
             .boolean({
                 message: "isElectric must be a boolean",
@@ -29,12 +20,6 @@ export const createVehicleTypeSchema = z
         requiresLicense: z
             .boolean({
                 message: "requiresLicense must be a boolean",
-            })
-            .optional(),
-
-        requiresFuel: z
-            .boolean({
-                message: "requiresFuel must be a boolean",
             })
             .optional(),
 
@@ -60,15 +45,6 @@ export const updateVehicleTypeSchema = z
             .transform((val) => val.replace(/\s+/g, " "))
             .optional(),
 
-        image: z
-            .string({
-                message: "Image must be a string",
-            })
-            .url({
-                message: "Image must be a valid URL",
-            })
-            .optional(),
-
         isElectric: z
             .boolean({
                 message: "isElectric must be a boolean",
@@ -81,12 +57,6 @@ export const updateVehicleTypeSchema = z
             })
             .optional(),
 
-        requiresFuel: z
-            .boolean({
-                message: "requiresFuel must be a boolean",
-            })
-            .optional(),
-
         categoryId: z
             .string({
                 message: "Category ID must be a string",
@@ -96,7 +66,7 @@ export const updateVehicleTypeSchema = z
             })
             .optional(),
     })
-    .refine((data) => Object.keys(data).length > 0, {
+    .refine((data) => Object.keys(data).length > 0 || true, {
         message: "At least one field must be provided for update",
     })
     .strict();
@@ -104,6 +74,10 @@ export const updateVehicleTypeSchema = z
 /**
  * Payload Types
  */
-export type ICreateVehicleTypePayload = z.infer<typeof createVehicleTypeSchema>;
+export type ICreateVehicleTypePayload = z.infer<
+    typeof createVehicleTypeSchema
+> & { image?: string };
 
-export type IUpdateVehicleTypePayload = z.infer<typeof updateVehicleTypeSchema>;
+export type IUpdateVehicleTypePayload = z.infer<
+    typeof updateVehicleTypeSchema
+> & { image?: string };

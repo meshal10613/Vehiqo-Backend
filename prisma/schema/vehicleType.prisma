@@ -4,7 +4,6 @@ model VehicleType {
   image           String?
   isElectric      Boolean @default(false)
   requiresLicense Boolean @default(true)
-  requiresFuel    Boolean @default(true)
 
   categoryId String
   category   VehicleCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade, onUpdate: Cascade)
