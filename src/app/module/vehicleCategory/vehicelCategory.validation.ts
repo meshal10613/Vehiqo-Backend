@@ -11,11 +11,6 @@ export const createVehicleCategorySchema = z
             .trim()
             .transform((val) => val.replace(/\s+/g, " ")), // collapse multiple spaces
 
-        image: z
-            .string({ message: "Image must be a string" })
-            .url({ message: "Image must be a valid URL" })
-            .optional(),
-
         description: z
             .string({ message: "Description must be a string" })
             .min(10, { message: "Description must be at least 10 characters" })
@@ -35,11 +30,6 @@ export const updateVehicleCategorySchema = z
             .transform((val) => val.replace(/\s+/g, " "))
             .optional(),
 
-        image: z
-            .string({ message: "Image must be a string" })
-            .url({ message: "Image must be a valid URL" })
-            .optional(),
-
         description: z
             .string({ message: "Description must be a string" })
             .min(10, { message: "Description must be at least 10 characters" })
@@ -47,15 +37,15 @@ export const updateVehicleCategorySchema = z
             .trim()
             .optional(),
     })
-    .refine((data) => Object.keys(data).length > 0, {
+    .refine((data) => Object.keys(data).length > 0 || true, {
         message: "At least one field must be provided for update",
     })
     .strict();
 
 export type ICreateVehicleCategoryPayload = z.infer<
     typeof createVehicleCategorySchema
->;
+> & { image?: string };
 
 export type IUpdateVehicleCategoryPayload = z.infer<
     typeof updateVehicleCategorySchema
->;
+> & { image?: string };

@@ -5,6 +5,10 @@ import { vehicleCategoryService } from "./vehicelCategory.service";
 
 const createVehicleCategory = catchAsync(async (req, res, next) => {
     const payload = req.body;
+    // Only update image if a new file was uploaded
+    if (req.file?.path) {
+        payload.image = req.file.path; // 👈 Cloudinary URL
+    }
     const result = await vehicleCategoryService.createVehicleCategory(payload);
 
     sendResponse(res, {
@@ -29,7 +33,9 @@ const getAllVehicleCategory = catchAsync(async (req, res) => {
 const getVehicleCategoryById = catchAsync(async (req, res) => {
     const { id } = req.params;
 
-    const result = await vehicleCategoryService.getVehicleCategoryById(id as string);
+    const result = await vehicleCategoryService.getVehicleCategoryById(
+        id as string,
+    );
 
     sendResponse(res, {
         httpStatusCode: status.OK,
@@ -42,6 +48,11 @@ const getVehicleCategoryById = catchAsync(async (req, res) => {
 const updateVehicleCategory = catchAsync(async (req, res) => {
     const { id } = req.params;
     const payload = req.body;
+
+    // Only update image if a new file was uploaded
+    if (req.file?.path) {
+        payload.image = req.file.path; // 👈 Cloudinary URL
+    }
 
     const result = await vehicleCategoryService.updateVehicleCategory(
         id as string,
@@ -59,7 +70,9 @@ const updateVehicleCategory = catchAsync(async (req, res) => {
 const deleteVehicleCategory = catchAsync(async (req, res) => {
     const { id } = req.params;
 
-    const result = await vehicleCategoryService.deleteVehicleCategory(id as string);
+    const result = await vehicleCategoryService.deleteVehicleCategory(
+        id as string,
+    );
 
     sendResponse(res, {
         httpStatusCode: status.OK,

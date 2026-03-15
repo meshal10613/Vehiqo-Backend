@@ -5,6 +5,7 @@ import {
     ICreateVehicleCategoryPayload,
     IUpdateVehicleCategoryPayload,
 } from "./vehicelCategory.validation";
+import { deleteFileFromCloudinary } from "../../config/cloudinary";
 
 const createVehicleCategory = async (
     payload: ICreateVehicleCategoryPayload,
@@ -58,6 +59,11 @@ const updateVehicleCategory = async (
         throw new AppError(status.NOT_FOUND, "Vehicle category not found");
     }
 
+    // If a new image is coming and old image exists → delete old one from Cloudinary
+    if (payload?.image && isExist.image) {
+        await deleteFileFromCloudinary(isExist.image);
+    }
+
     const result = await prisma.vehicleCategory.update({
         where: { id },
         data: payload,
@@ -84,8 +90,8 @@ const deleteVehicleCategory = async (id: string) => {
 
 export const vehicleCategoryService = {
     createVehicleCategory,
-	getAllVehicleCategory,
-	getVehicleCategoryById,
-	updateVehicleCategory,
-	deleteVehicleCategory
+    getAllVehicleCategory,
+    getVehicleCategoryById,
+    updateVehicleCategory,
+    deleteVehicleCategory,
 };
