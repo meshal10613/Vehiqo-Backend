@@ -4,7 +4,6 @@ import { sendResponse } from "../../shared/sendResponse";
 import status from "http-status";
 import { authService } from "./auth.service";
 import { tokenUtils } from "../../utils/token";
-import { IRequestUser } from "../../interface/requestUser.interface";
 import { CookieUtils } from "../../utils/cookie";
 
 const registerUser = catchAsync(
@@ -82,6 +81,27 @@ const verifyEmail = catchAsync(
     },
 );
 
+const updateUser = catchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const payload = req.body;
+        const user = req.user;
+
+        // Only update image if a new file was uploaded
+        if (req.file?.path) {
+            payload.image = req.file.path; // 👈 Cloudinary URL
+        }
+
+        const result = await authService.updateUser(payload, user);
+
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "User updated successfully",
+            data: result,
+        });
+    },
+);
+
 const logoutUser = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
         const betterAuthSessionToken = req.cookies["better-auth.session_token"];
@@ -116,5 +136,6 @@ export const authController = {
     loginUser,
     getMe,
     verifyEmail,
+    updateUser,
     logoutUser,
 };

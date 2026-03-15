@@ -24,6 +24,13 @@ router.get(
 );
 router.post("/verify-email", authController.verifyEmail);
 
+router.patch(
+    "/update-profile",
+    checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
+    validateRequest(authValidation.updateUserSchema),
+    authController.updateUser,
+);
+
 router.post(
     "/logout",
     checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),

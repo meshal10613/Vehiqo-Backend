@@ -1,10 +1,15 @@
 import status from "http-status";
 import AppError from "../../errorHelper/AppError";
 import { auth } from "../../lib/auth";
-import { ILoginUserPayload, IRegisterUserPayload } from "./auth.interface";
+import {
+    ILoginUserPayload,
+    IRegisterUserPayload,
+    IUpdateUserPayload,
+} from "./auth.interface";
 import { prisma } from "../../lib/prisma";
 import { tokenUtils } from "../../utils/token";
 import { IRequestUser } from "../../interface/requestUser.interface";
+import { deleteFileFromCloudinary } from "../../config/cloudinary";
 
 const registerUser = async (payload: IRegisterUserPayload) => {
     const { name, email, password } = payload;
@@ -155,6 +160,48 @@ const verifyEmail = async (email: string, otp: string) => {
     }
 };
 
+const updateUser = async (payload: IUpdateUserPayload, user: IRequestUser) => {
+    const isExist = await prisma.user.findUnique({
+        where: { id: user.userId },
+    });
+
+    if (!isExist) {
+        throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    // Only the owner can update their profile
+    if (isExist.email !== user.email || isExist.role !== user.role) {
+        throw new AppError(
+            status.FORBIDDEN,
+            "You are not allowed to update this user",
+        );
+    }
+
+    // If new image is coming and old image exists → delete old from Cloudinary
+    if (payload.image && isExist.image) {
+        await deleteFileFromCloudinary(isExist.image);
+    }
+
+    const result = await prisma.user.update({
+        where: { id: user.userId },
+        data: payload,
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+            mobileNumber: true,
+            licenseNumber: true,
+            nidNumber: true,
+            role: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+    });
+
+    return result;
+};
+
 const logoutUser = async (sessionToken: string) => {
     const result = await auth.api.signOut({
         headers: new Headers({
@@ -170,5 +217,6 @@ export const authService = {
     loginUser,
     getMe,
     verifyEmail,
+    updateUser,
     logoutUser,
 };

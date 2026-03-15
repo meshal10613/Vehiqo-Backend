@@ -8,3 +8,11 @@ export interface ILoginUserPayload {
     email: string;
     password: string;
 }
+
+export interface IUpdateUserPayload {
+    name?: string;
+    image?: string;
+    mobileNumber?: string;
+    licenseNumber?: string;
+    nidNumber?: string;
+}
