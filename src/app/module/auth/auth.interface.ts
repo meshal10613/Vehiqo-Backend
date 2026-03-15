@@ -1,3 +1,5 @@
+import { UserRole } from "../../../generated/prisma/enums";
+
 export interface IRegisterUserPayload {
 	name: string
     email: string;
@@ -20,4 +22,9 @@ export interface IUpdateUserPayload {
 export interface IChangePasswordPayload {
     currentPassword: string;
     newPassword: string;
+}
+
+export interface IUpdateRolePayload {
+    userId: string;
+    role: UserRole;
 }

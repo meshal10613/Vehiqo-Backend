@@ -113,6 +113,22 @@ const updateUser = catchAsync(
     },
 );
 
+const updateRole = catchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const payload = req.body;
+        const user = req.user;
+
+        const result = await authService.updateRole(payload, user);
+
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "User role updated successfully",
+            data: result,
+        });
+    },
+)
+
 const verifyEmail = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
         const { email, otp } = req.body;
@@ -187,6 +203,7 @@ export const authController = {
     getMe,
     changePassword,
     updateUser,
+    updateRole,
     verifyEmail,
     forgetPassword,
     resetPassword,

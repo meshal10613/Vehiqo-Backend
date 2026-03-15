@@ -5,6 +5,7 @@ import {
     IChangePasswordPayload,
     ILoginUserPayload,
     IRegisterUserPayload,
+    IUpdateRolePayload,
     IUpdateUserPayload,
 } from "./auth.interface";
 import { prisma } from "../../lib/prisma";
@@ -221,6 +222,36 @@ const updateUser = async (payload: IUpdateUserPayload, user: IRequestUser) => {
     return result;
 };
 
+const updateRole = async (payload: IUpdateRolePayload, user: IRequestUser) => {
+    // Prevent admin from changing their own role
+    if (payload.userId === user.userId) {
+        throw new AppError(status.FORBIDDEN, "You cannot change your own role");
+    }
+
+    const targetUser = await prisma.user.findUnique({
+        where: { id: payload.userId },
+    });
+
+    if (!targetUser) {
+        throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    const result = await prisma.user.update({
+        where: { id: payload.userId },
+        data: { role: payload.role },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            updatedAt: true,
+        },
+    });
+
+    return result;
+};
+
 const verifyEmail = async (email: string, otp: string) => {
     const user = await prisma.user.findUnique({
         where: { email },
@@ -372,6 +403,7 @@ export const authService = {
     getMe,
     changePassword,
     updateUser,
+    updateRole,
     verifyEmail,
     forgetPassword,
     resetPassword,
