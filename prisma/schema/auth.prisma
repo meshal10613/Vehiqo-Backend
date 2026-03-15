@@ -16,6 +16,7 @@ model User {
 
     sessions Session[]
     accounts Account[]
+    reviews Review[]
 
     @@unique([email])
     @@map("user")

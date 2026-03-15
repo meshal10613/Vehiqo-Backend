@@ -24,4 +24,6 @@ model Vehicle {
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
+
+    reviews Review[]
 }
