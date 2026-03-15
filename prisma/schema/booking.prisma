@@ -1,0 +1,35 @@
+model Booking {
+    id            String        @id @default(uuid())
+    status        BookingStatus @default(PENDING)
+    startDate     DateTime
+    endDate       DateTime
+    pickedUpAt    DateTime?
+    returnedAt    DateTime?
+    pricePerDay   Float
+    totalDays     Int
+    baseCost      Float
+    advanceAmount Float
+    extraDays     Int           @default(0)
+    lateFee       Float         @default(0)
+    fuelCharge    Float         @default(0)
+    fuelCredit    Float         @default(0)
+    damageCharge  Float         @default(0)
+    totalCost     Float
+    remainingDue  Float
+    notes         String?
+
+    vehicleId String
+    vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+    customerId String
+    customer   User   @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+    payments Payment[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([vehicleId])
+    @@index([customerId])
+    @@index([status])
+}

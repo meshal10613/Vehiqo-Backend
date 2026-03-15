@@ -31,3 +31,34 @@ enum Unit {
     KWH
     CUBIC_METRE
 }
+
+enum PaymentType {
+    ADVANCE
+    FINAL
+    FULL
+    REFUND
+}
+
+enum PaymentMethod {
+    CASH
+    STRIPE
+    SSLCOMMERZ
+    BKASH
+    NOGOD
+}
+
+enum PaymentStatus {
+    PENDING
+    PAID
+    FAILED
+    REFUNDED
+}
+
+enum BookingStatus {
+    PENDING
+    ADVANCE_PAID
+    PICKED_UP
+    RETURNED
+    COMPLETED
+    CANCELLED
+}
