@@ -30,6 +30,10 @@ interface EnvConfig {
         CLOUDE_NAME: string;
         API_KEY: string;
         API_SECRET: string;
+    },
+    ADMIN: {
+        EMAIL: string;
+        PASSWORD: string;
     }
 }
 
@@ -56,6 +60,8 @@ const loadEnvVariables = (): EnvConfig => {
         "CLOUDINARY_CLOUDE_NAME",
         "CLOUDINARY_API_KEY",
         "CLOUDINARY_API_SECRET",
+        "ADMIN_EMAIL",
+        "ADMIN_PASSWORD",
     ];
 
     requireEnvVariable.forEach((variable) => {
@@ -95,6 +101,10 @@ const loadEnvVariables = (): EnvConfig => {
             CLOUDE_NAME: process.env.CLOUDINARY_CLOUDE_NAME as string,
             API_KEY: process.env.CLOUDINARY_API_KEY as string,
             API_SECRET: process.env.CLOUDINARY_API_SECRET as string,
+        },
+        ADMIN: {
+            EMAIL: process.env.ADMIN_EMAIL as string,
+            PASSWORD: process.env.ADMIN_PASSWORD as string
         }
     };
 };
