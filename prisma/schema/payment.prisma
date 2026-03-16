@@ -3,8 +3,9 @@ model Payment {
     type          PaymentType
     amount        Float
     method        PaymentMethod
-    status        PaymentStatus @default(PENDING)
+    status        PaymentStatus @default(UNPAID)
     transactionId String?       @unique
+    stripeEventId String?       @unique
     note          String?
     paidAt        DateTime?
     invoiceUrl    String?

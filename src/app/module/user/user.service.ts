@@ -18,7 +18,7 @@ const getAllUsers = async (query: IQueryParams) => {
         .search()
         .filter()
         .where({
-            isDeleted: false,
+            // isDeleted: false,
         })
         .include({
             bookings: true,

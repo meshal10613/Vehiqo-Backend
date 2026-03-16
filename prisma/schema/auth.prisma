@@ -12,8 +12,6 @@ model User {
     role          UserRole
     licenseNumber String?
     nidNumber     String?
-    isDeleted     Boolean   @default(false)
-    deletedAt     DateTime?
 
     sessions Session[]
     accounts Account[]

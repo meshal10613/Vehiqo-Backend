@@ -17,7 +17,7 @@ const registerUser = async (payload: IRegisterUserPayload) => {
     const { name, email, password } = payload;
 
     const existingUser = await prisma.user.findUnique({
-        where: { email, isDeleted: false },
+        where: { email },
     });
 
     if (existingUser) {
@@ -41,7 +41,6 @@ const registerUser = async (payload: IRegisterUserPayload) => {
         role: data.user.role,
         name: data.user.name,
         email: data.user.email,
-        isDeleted: data.user.isDeleted,
         emailVerified: data.user.emailVerified,
     });
 
@@ -50,7 +49,6 @@ const registerUser = async (payload: IRegisterUserPayload) => {
         role: data.user.role,
         name: data.user.name,
         email: data.user.email,
-        isDeleted: data.user.isDeleted,
         emailVerified: data.user.emailVerified,
     });
 
@@ -71,16 +69,11 @@ const loginUser = async (payload: ILoginUserPayload) => {
         },
     });
 
-    if (data.user.isDeleted) {
-        throw new AppError(status.NOT_FOUND, "User is deleted");
-    }
-
     const accessToken = tokenUtils.getAccessToken({
         userId: data.user.id,
         role: data.user.role,
         name: data.user.name,
         email: data.user.email,
-        isDeleted: data.user.isDeleted,
         emailVerified: data.user.emailVerified,
     });
 
@@ -89,7 +82,6 @@ const loginUser = async (payload: ILoginUserPayload) => {
         role: data.user.role,
         name: data.user.name,
         email: data.user.email,
-        isDeleted: data.user.isDeleted,
         emailVerified: data.user.emailVerified,
     });
 
@@ -160,7 +152,6 @@ const changePassword = async (
         role: session.user.role,
         name: session.user.name,
         email: session.user.email,
-        isDeleted: session.user.isDeleted,
         emailVerified: session.user.emailVerified,
     });
 
@@ -169,7 +160,6 @@ const changePassword = async (
         role: session.user.role,
         name: session.user.name,
         email: session.user.email,
-        isDeleted: session.user.isDeleted,
         emailVerified: session.user.emailVerified,
     });
 
@@ -306,11 +296,10 @@ const forgetPassword = async (email: string) => {
         select: {
             id: true,
             emailVerified: true,
-            isDeleted: true,
         },
     });
 
-    if (!user || user.isDeleted) {
+    if (!user) {
         throw new AppError(status.NOT_FOUND, "User not found");
     }
 
@@ -349,7 +338,7 @@ const resetPassword = async (
         },
     });
 
-    if (!isUserExist || isUserExist.isDeleted) {
+    if (!isUserExist) {
         throw new AppError(status.NOT_FOUND, "User not found");
     }
 

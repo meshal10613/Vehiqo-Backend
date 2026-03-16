@@ -63,13 +63,6 @@ export const checkAuth =
                         console.log("Session Expiring Soon!!");
                     }
 
-                    if (user.isDeleted) {
-                        throw new AppError(
-                            status.UNAUTHORIZED,
-                            "Unauthorized access! User is deleted.",
-                        );
-                    }
-
                     if (
                         authRoles.length > 0 &&
                         !authRoles.includes(user.role)
