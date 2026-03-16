@@ -63,6 +63,40 @@ const createBooking = async (
     return result;
 };
 
+const getAllBooking = async () => {
+    const result = await prisma.booking.findMany({
+        include: {
+            vehicle: {
+                include: {
+                    vehicleType: true,
+                    fuel: true,
+                },
+            },
+            customer: true,
+        },
+    });
+    return result;
+};
+
+const getMyBooking = async (user: IRequestUser) => {
+    const result = await prisma.booking.findMany({
+        where: {
+            customerId: user.userId,
+        },
+        include: {
+            vehicle: {
+                include: {
+                    vehicleType: true,
+                    fuel: true,
+                },
+            },
+        },
+    });
+    return result;
+};
+
 export const bookingService = {
     createBooking,
+    getAllBooking,
+    getMyBooking,
 };
