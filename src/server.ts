@@ -3,6 +3,7 @@ import app from "./app";
 import chalk from "chalk";
 import { envVars } from "./app/config/env";
 import { seedAdmin } from "./app/utils/seed";
+import { generateTransactionId } from "./app/utils/generateTransactionId";
 
 
 let server: Server;
