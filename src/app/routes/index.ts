@@ -6,6 +6,7 @@ import { vehicleCategoryRoutes } from "../module/vehicleCategory/vehicelCategory
 import { vehicleTypeRoutes } from "../module/vehicleType/vehicleType.route";
 import { vehicleRoutes } from "../module/vehicle/vehicle.route";
 import { reviewRoutes } from "../module/review/review.route";
+import { bookingRoutes } from "../module/booking/booking.route";
 
 const router = Router();
 
@@ -15,6 +16,7 @@ router.use("/fuel-price", fuelPriceRoutes);
 router.use("/vehicle-category", vehicleCategoryRoutes);
 router.use("/vehicle-type", vehicleTypeRoutes);
 router.use("/vehicle", vehicleRoutes);
+router.use("/booking", bookingRoutes);
 router.use("/review", reviewRoutes);
 
 export const IndexRoutes = router;
