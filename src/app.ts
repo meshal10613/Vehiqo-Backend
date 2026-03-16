@@ -3,6 +3,8 @@ import cookieParser from "cookie-parser";
 import { IndexRoutes } from "./app/routes";
 import { notFound } from "./app/middleware/notFound";
 import { globalErrorHandler } from "./app/middleware/globalErrorHandler";
+import "./app/cron/vehicle.cron";
+import "./app/cron/booking.cron";
 
 const app: Application = express();
 

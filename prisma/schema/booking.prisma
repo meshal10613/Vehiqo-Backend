@@ -19,10 +19,10 @@ model Booking {
     notes         String?
 
     vehicleId String
-    vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
     customerId String
-    customer   User   @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    customer   User   @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
     payments Payment[]
 
