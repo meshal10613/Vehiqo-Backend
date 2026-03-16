@@ -17,6 +17,14 @@ const createVehicle = async (payload: ICreateVehiclePayload) => {
         throw new AppError(status.NOT_FOUND, "Vehicle type not found");
     }
 
+    if(vehicleType.isElectric && payload?.mileage){
+        throw new AppError(status.BAD_REQUEST, "Range is required for electric vehicles");
+    }
+
+    if(!vehicleType.isElectric && payload?.range){
+        throw new AppError(status.BAD_REQUEST, "Mileage is required for non-electric vehicles");
+    }
+
     // Check fuel price exists for the given fuelType
     const fuelPrice = await prisma.fuelPrice.findUnique({
         where: { fuelType: payload.fuelType },
