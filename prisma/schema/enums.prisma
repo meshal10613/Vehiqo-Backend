@@ -21,6 +21,7 @@ enum Fuel {
 
 enum VehicleStatus {
     AVAILABLE
+    BOOKED
     RENTED
     MAINTENANCE
     RETIRED

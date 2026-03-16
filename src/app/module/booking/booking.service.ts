@@ -15,13 +15,32 @@ const createBooking = async (
     user: IRequestUser,
 ) => {
     const { vehicleId, startDate, endDate, advanceAmount, ...rest } = payload;
-    const vehicle = await prisma.vehicle.findUnique({
-        where: { id: vehicleId },
-        include: {
-            vehicleType: true,
-        },
-    });
 
+    const start = new Date(startDate);
+    const end   = new Date(endDate);
+
+    // ── 1. Fetch vehicle + user in parallel ───────────────────────────────────
+    // Original code fired 3 sequential queries (vehicle → user → create+update).
+    // Promise.all runs the two independent reads concurrently, cutting wait time
+    // roughly in half before we even touch the write path.
+    const [vehicle, customer] = await Promise.all([
+        prisma.vehicle.findUnique({
+            where: { id: vehicleId },
+            select: {
+                status:      true,
+                pricePerDay: true,
+                vehicleType: {
+                    select: { requiresLicense: true },
+                },
+            },
+        }),
+        prisma.user.findUnique({
+            where: { id: user.userId },
+            select: { licenseNumber: true },
+        }),
+    ]);
+
+    // ── 2. Guard: vehicle exists & available ──────────────────────────────────
     if (!vehicle) {
         throw new AppError(status.NOT_FOUND, "Vehicle not found");
     }
@@ -33,39 +52,39 @@ const createBooking = async (
         );
     }
 
-    const isExistUser = await prisma.user.findUnique({
-        where: {
-            id: user.userId,
-        },
-    });
-
-    if (
-        (!isExistUser?.licenseNumber || !isExistUser?.licenseNumber === null) &&
-        vehicle.vehicleType.requiresLicense
-    ) {
-        throw new AppError(status.BAD_REQUEST, "User need license to booking");
+    if (vehicle.vehicleType.requiresLicense && !customer?.licenseNumber) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "A valid license is required to book this vehicle",
+        );
     }
 
-    const diffMs = new Date(endDate).getTime() - new Date(startDate).getTime();
-    const totalDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    const baseCost = vehicle.pricePerDay * totalDays;
+    const totalDays = differenceInCalendarDays(end, start);
+    const baseCost  = vehicle.pricePerDay * totalDays;
 
-    const result = await prisma.booking.create({
-        data: {
-            startDate: new Date(startDate),
-            endDate: new Date(endDate),
-            pricePerDay: vehicle.pricePerDay,
-            totalDays,
-            baseCost,
-            totalCost: baseCost,
-            remainingDue: baseCost,
-            advanceAmount: advanceAmount,
-            vehicleId: vehicleId,
-            customerId: user.userId,
-            ...rest,
-        },
-    });
-    return result;
+    const [booking] = await prisma.$transaction([
+        prisma.booking.create({
+            data: {
+                startDate:    start,
+                endDate:      end,
+                pricePerDay:  vehicle.pricePerDay,
+                totalDays,
+                baseCost,
+                totalCost:    baseCost,   // no surcharges yet at booking time
+                remainingDue: baseCost - (advanceAmount ?? 0),
+                advanceAmount: advanceAmount ?? 0,
+                vehicleId,
+                customerId:   user.userId,
+                ...rest,
+            },
+        }),
+        prisma.vehicle.update({
+            where: { id: vehicleId },
+            data:  { status: VehicleStatus.BOOKED },
+        }),
+    ]);
+
+    return booking;
 };
 
 const getAllBooking = async () => {
