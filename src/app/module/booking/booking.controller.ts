@@ -5,7 +5,7 @@ import { bookingService } from "./booking.service";
 
 const createBooking = catchAsync(async (req, res) => {
     const payload = req.body;
-	const user = req.user;
+    const user = req.user;
     const result = await bookingService.createBooking(payload, user);
 
     sendResponse(res, {
@@ -39,4 +39,21 @@ const getMyBooking = catchAsync(async (req, res) => {
     });
 });
 
-export const bookingController = { createBooking, getAllBooking, getMyBooking };
+export const updateBooking = catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const booking = await bookingService.updateBooking(id as string, req.body);
+
+    sendResponse(res, {
+        httpStatusCode: status.OK,
+        success: true,
+        message: "Booking updated successfully",
+        data: booking,
+    });
+});
+
+export const bookingController = {
+    createBooking,
+    getAllBooking,
+    getMyBooking,
+    updateBooking,
+};
