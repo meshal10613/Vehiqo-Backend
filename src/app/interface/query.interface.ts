@@ -31,7 +31,7 @@ export interface PrismaModelDelegate {
 }
 
 export interface IQueryParams {
-    searchTerm ?: string;
+    searchTerm?: string;
     page?: string;
     limit?: string;
     sortBy?: string;

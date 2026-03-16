@@ -7,6 +7,7 @@ model User {
     createdAt     DateTime @default(now())
     updatedAt     DateTime @updatedAt
 
+    gender        Gender?
     mobileNumber  String?
     role          UserRole
     licenseNumber String?
@@ -16,7 +17,7 @@ model User {
 
     sessions Session[]
     accounts Account[]
-    reviews Review[]
+    reviews  Review[]
     bookings Booking[]
 
     @@unique([email])

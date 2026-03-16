@@ -10,7 +10,6 @@ import {
     PrismaWhereConditions,
 } from "../interface/query.interface";
 
-
 // T = Model Type
 export class QueryBuilder<
     T,
@@ -45,7 +44,9 @@ export class QueryBuilder<
     }
 
     search(): this {
+        if (!this.queryParams) return this;
         const { searchTerm } = this.queryParams;
+        console.log(searchTerm);
         const { searchableFields } = this.config;
         // doctorSearchableFields = ['user.name', 'user.email', 'specialties.specialty.title' , 'specialties.specialty.description']
         if (searchTerm && searchableFields && searchableFields.length > 0) {
@@ -112,6 +113,7 @@ export class QueryBuilder<
     // /doctors?searchTerm=john&page=1&sortBy=name&specialty=cardiology&appointmentFee[lt]=100 => {}
     // { specialty: 'cardiology', appointmentFee: { lt: '100' } }
     filter(): this {
+        if (!this.queryParams) return this;
         const { filterableFields } = this.config;
         const excludedField = [
             "searchTerm",
@@ -267,6 +269,7 @@ export class QueryBuilder<
     }
 
     paginate(): this {
+        if (!this.queryParams) return this;
         const page = Number(this.queryParams.page) || 1;
         const limit = Number(this.queryParams.limit) || 10;
 
@@ -281,6 +284,7 @@ export class QueryBuilder<
     }
 
     sort(): this {
+        if (!this.queryParams) return this;
         const sortBy = this.queryParams.sortBy || "createdAt";
         const sortOrder = this.queryParams.sortOrder === "asc" ? "asc" : "desc";
 
@@ -324,6 +328,7 @@ export class QueryBuilder<
     }
 
     fields(): this {
+        if (!this.queryParams) return this;
         const fieldsParam = this.queryParams.fields;
         // /doctors?fields=id,name,user => select: { id: true, name: true, user: { select: { name: true } } }
 
@@ -417,6 +422,8 @@ export class QueryBuilder<
     }
 
     async execute(): Promise<IQueryResult<T>> {
+        console.log("query:", JSON.stringify(this.query, null, 2));
+        console.log("countQuery:", JSON.stringify(this.countQuery, null, 2));
         const [total, data] = await Promise.all([
             this.model.count(
                 this.countQuery as Parameters<typeof this.model.count>[0],

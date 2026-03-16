@@ -63,3 +63,8 @@ enum BookingStatus {
     COMPLETED
     CANCELLED
 }
+
+enum Gender {
+    MALE
+    FEMALE
+}
