@@ -11,7 +11,7 @@ cron.schedule("*/30 * * * *", async () => {
         const deleted = await prisma.booking.deleteMany({
             where: {
                 status: BookingStatus.PENDING,
-                createdAt: { lte: oneDayAgo },
+                updatedAt: { lte: oneDayAgo },
             },
         });
 
