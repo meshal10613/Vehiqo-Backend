@@ -5,11 +5,14 @@ import {
     createFuelPriceSchema,
     updateFuelPriceSchema,
 } from "./fuelPrice.validation";
+import { checkAuth } from "../../middleware/checkAuth";
+import { UserRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
 router.post(
     "/",
+    checkAuth(UserRole.ADMIN),
     validateRequest(createFuelPriceSchema),
     fuelPriceController.createFuelPrice,
 );
