@@ -102,7 +102,7 @@ export const generateInvoicePdf = (data: InvoiceData): Promise<Buffer> => {
         doc.fillColor(white)
             .fontSize(22)
             .font("Helvetica-Bold")
-            .text("VEHICLE RENTAL", col1X, 22);
+            .text("Vehiqo", col1X, 22);
 
         doc.fillColor(accent)
             .fontSize(10)
@@ -280,6 +280,16 @@ export const generateInvoicePdf = (data: InvoiceData): Promise<Buffer> => {
                           qty: "—",
                           rate: "—",
                           amount: `- ${currency(data.fuelCredit)}`,
+                      },
+                  ]
+                : []),
+            ...(data.damageCharge > 0
+                ? [
+                      {
+                          desc: "Damage Charge",
+                          qty: "—",
+                          rate: "—",
+                          amount: currency(data.damageCharge),
                       },
                   ]
                 : []),

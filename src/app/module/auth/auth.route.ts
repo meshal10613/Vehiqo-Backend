@@ -22,6 +22,7 @@ router.get(
     checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
     authController.getMe,
 );
+router.post("/refresh-token", authController.getNewToken);
 router.post(
     "/change-password",
     checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
