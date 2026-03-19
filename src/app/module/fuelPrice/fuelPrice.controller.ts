@@ -2,6 +2,7 @@ import status from "http-status";
 import { catchAsync } from "../../shared/catchAsync";
 import { sendResponse } from "../../shared/sendResponse";
 import { fuelPriceService } from "./fuelPrice.service";
+import { IQueryParams } from "../../interface/query.interface";
 
 const createFuelPrice = catchAsync(async (req, res, next) => {
     const payload = req.body;
@@ -32,7 +33,8 @@ const updateFuelPrice = catchAsync(async (req, res, next) => {
 });
 
 const getAllFuelPrice = catchAsync(async (req, res, next) => {
-    const result = await fuelPriceService.getAllFuelPrice();
+    const query = req.query;
+    const result = await fuelPriceService.getAllFuelPrice(query as IQueryParams);
 
     sendResponse(res, {
         httpStatusCode: status.OK,

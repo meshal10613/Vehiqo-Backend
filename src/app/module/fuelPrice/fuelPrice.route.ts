@@ -19,9 +19,14 @@ router.post(
 
 router.patch(
     "/:id",
+    checkAuth(UserRole.ADMIN),
     validateRequest(updateFuelPriceSchema),
     fuelPriceController.updateFuelPrice,
 );
-router.get("/", fuelPriceController.getAllFuelPrice);
+router.get(
+    "/",
+    checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
+    fuelPriceController.getAllFuelPrice,
+);
 
 export const fuelPriceRoutes = router;

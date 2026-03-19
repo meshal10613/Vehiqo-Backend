@@ -4,6 +4,7 @@ import { validateRequest } from "../../middleware/validateRequest";
 import { authValidation } from "./auth.validation";
 import { checkAuth } from "../../middleware/checkAuth";
 import { UserRole } from "../../../generated/prisma/enums";
+import { multerUpload } from "../../config/multer";
 
 const router = Router();
 
@@ -32,6 +33,7 @@ router.post(
 router.patch(
     "/update-profile",
     checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
+    multerUpload.single("image"),
     validateRequest(authValidation.updateUserSchema),
     authController.updateUser,
 );
@@ -39,7 +41,7 @@ router.patch(
 router.patch("/update-role", checkAuth(UserRole.ADMIN), authController.updateRole);
 
 router.post("/verify-email", authController.verifyEmail);
-router.post("/forget-password", authController.forgetPassword);
+router.post("/forgot-password", authController.forgetPassword);
 router.post("/reset-password", authController.resetPassword);
 
 router.post(
