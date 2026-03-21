@@ -6,6 +6,10 @@ import {
     ICreateVehiclePayload,
     IUpdateVehiclePayload,
 } from "./vehicle.validation";
+import { IQueryParams } from "../../interface/query.interface";
+import { QueryBuilder } from "../../utils/QueryBuilder";
+import { Prisma, Vehicle } from "../../../generated/prisma/client";
+import { vehicleFilterableFields, vehicleSearchableFields } from "./vehicle.constant";
 
 const createVehicle = async (payload: ICreateVehiclePayload) => {
     // Check vehicle type exists
@@ -17,12 +21,18 @@ const createVehicle = async (payload: ICreateVehiclePayload) => {
         throw new AppError(status.NOT_FOUND, "Vehicle type not found");
     }
 
-    if(vehicleType.isElectric && payload?.mileage){
-        throw new AppError(status.BAD_REQUEST, "Range is required for electric vehicles");
+    if (vehicleType.isElectric && payload?.mileage) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "Range is required for electric vehicles",
+        );
     }
 
-    if(!vehicleType.isElectric && payload?.range){
-        throw new AppError(status.BAD_REQUEST, "Mileage is required for non-electric vehicles");
+    if (!vehicleType.isElectric && payload?.range) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            "Mileage is required for non-electric vehicles",
+        );
     }
 
     // Check fuel price exists for the given fuelType
@@ -62,16 +72,24 @@ const createVehicle = async (payload: ICreateVehiclePayload) => {
     return result;
 };
 
-const getAllVehicles = async () => {
-    const result = await prisma.vehicle.findMany({
-        include: {
-            vehicleType: {
-                include: { category: true },
-            },
-            fuel: true,
-        },
-        orderBy: { createdAt: "desc" },
+const getAllVehicles = async (query: IQueryParams) => {
+    const queryBuilder = new QueryBuilder<
+        Vehicle,
+        Prisma.VehicleWhereInput,
+        Prisma.VehicleInclude
+    >(prisma.vehicle, query, {
+        filterableFields: vehicleFilterableFields,
+        searchableFields: vehicleSearchableFields,
     });
+
+    const result = await queryBuilder
+        .search()
+        .filter()
+        .include({ vehicleType: { include: { category: true } }, fuel: true })
+        .sort()
+        .fields()
+        .paginate()
+        .execute();
 
     return result;
 };

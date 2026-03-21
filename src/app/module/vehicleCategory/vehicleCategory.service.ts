@@ -4,8 +4,15 @@ import { prisma } from "../../lib/prisma";
 import {
     ICreateVehicleCategoryPayload,
     IUpdateVehicleCategoryPayload,
-} from "./vehicelCategory.validation";
+} from "./vehicleCategory.validation";
 import { deleteFileFromCloudinary } from "../../config/cloudinary";
+import { IQueryParams } from "../../interface/query.interface";
+import { QueryBuilder } from "../../utils/QueryBuilder";
+import { Prisma, VehicleCategory } from "../../../generated/prisma/client";
+import {
+    vehicleCategoryFilterableFields,
+    vehicleCategorySearchableFields,
+} from "./vehicleCategory.constant";
 
 const createVehicleCategory = async (
     payload: ICreateVehicleCategoryPayload,
@@ -29,9 +36,25 @@ const createVehicleCategory = async (
     return result;
 };
 
-const getAllVehicleCategory = async () => {
-    const result = await prisma.vehicleCategory.findMany();
+const getAllVehicleCategory = async (query: IQueryParams) => {
+    const queryBuilder = new QueryBuilder<
+        VehicleCategory,
+        Prisma.VehicleCategoryWhereInput,
+        Prisma.VehicleCategoryInclude
+    >(prisma.vehicleCategory, query, {
+        filterableFields: vehicleCategoryFilterableFields,
+        searchableFields: vehicleCategorySearchableFields,
+    });
 
+    await queryBuilder
+        .search()
+        .filter()
+        .include({ types: { include: { vehicles: true } } })
+        .sort()
+        .fields()
+        .paginate();
+
+    const result = await queryBuilder.execute();
     return result;
 };
 

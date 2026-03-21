@@ -40,7 +40,8 @@ const getAllFuelPrice = catchAsync(async (req, res, next) => {
         httpStatusCode: status.OK,
         success: true,
         message: "Fuel price fetched successfully",
-        data: result,
+        data: result.data,
+        meta: result.meta,
     });
 });
 

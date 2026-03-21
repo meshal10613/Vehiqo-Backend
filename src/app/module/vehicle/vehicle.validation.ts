@@ -1,5 +1,25 @@
 import { z } from "zod";
-import { Fuel, Transmission, VehicleStatus } from "../../../generated/prisma/enums";
+import {
+    Fuel,
+    Transmission,
+    VehicleStatus,
+} from "../../../generated/prisma/enums";
+
+const coercedInt = (schema: z.ZodNumber) =>
+    z.preprocess((val) => {
+        if (typeof val === "number") return val;
+        if (typeof val === "string" && val.trim() !== "")
+            return parseInt(val, 10);
+        return val;
+    }, schema);
+
+const coercedFloat = (schema: z.ZodNumber) =>
+    z.preprocess((val) => {
+        if (typeof val === "number") return val;
+        if (typeof val === "string" && val.trim() !== "")
+            return parseFloat(val);
+        return val;
+    }, schema);
 
 export const createVehicleSchema = z
     .object({
@@ -15,13 +35,15 @@ export const createVehicleSchema = z
             .max(50, { message: "Model must not exceed 50 characters" })
             .trim(),
 
-        year: z
-            .number({ message: "Year must be a number" })
-            .int({ message: "Year must be an integer" })
-            .min(1950, { message: "Year must be 1950 or later" })
-            .max(new Date().getFullYear() + 1, {
-                message: "Year cannot be in the future",
-            }),
+        year: coercedInt(
+            z
+                .number({ message: "Year must be a number" })
+                .int({ message: "Year must be an integer" })
+                .min(1950, { message: "Year must be 1950 or later" })
+                .max(new Date().getFullYear() + 1, {
+                    message: "Year cannot be in the future",
+                }),
+        ),
 
         plateNo: z
             .string({ message: "Plate number must be a string" })
@@ -40,42 +62,48 @@ export const createVehicleSchema = z
             message: "Invalid transmission type",
         }),
 
-        seats: z
-            .number({ message: "Seats must be a number" })
-            .int({ message: "Seats must be an integer" })
-            .min(1, { message: "Seats must be at least 1" })
-            .max(100, { message: "Seats must not exceed 100" })
-            .optional(),
-
         fuelType: z.nativeEnum(Fuel, {
             message: "Invalid fuel type",
         }),
 
-        pricePerDay: z
-            .number({ message: "Price per day must be a number" })
-            .positive({ message: "Price per day must be greater than 0" })
-            .max(100000, {
-                message: "Price per day seems unrealistically high",
-            })
-            .multipleOf(0.01, {
-                message: "Price can have at most 2 decimal places",
-            }),
+        pricePerDay: coercedFloat(
+            z
+                .number({ message: "Price per day must be a number" })
+                .positive({ message: "Price per day must be greater than 0" })
+                .max(100000, {
+                    message: "Price per day seems unrealistically high",
+                })
+                .multipleOf(0.01, {
+                    message: "Price can have at most 2 decimal places",
+                }),
+        ),
 
-        mileage: z
-            .number({ message: "Mileage must be a number" })
-            .positive({ message: "Mileage must be greater than 0" })
-            .optional(),
+        seats: coercedInt(
+            z
+                .number({ message: "Seats must be a number" })
+                .int({ message: "Seats must be an integer" })
+                .min(1, { message: "Seats must be at least 1" })
+                .max(100, { message: "Seats must not exceed 100" }),
+        ).optional(),
 
-        range: z
-            .number({ message: "Range must be a number" })
-            .positive({ message: "Range must be greater than 0" })
-            .optional(),
+        mileage: coercedFloat(
+            z
+                .number({ message: "Mileage must be a number" })
+                .positive({ message: "Mileage must be greater than 0" }),
+        ).optional(),
 
-        engineCC: z
-            .number({ message: "Engine CC must be a number" })
-            .int({ message: "Engine CC must be an integer" })
-            .positive({ message: "Engine CC must be greater than 0" })
-            .optional(),
+        range: coercedFloat(
+            z
+                .number({ message: "Range must be a number" })
+                .positive({ message: "Range must be greater than 0" }),
+        ).optional(),
+
+        engineCC: coercedInt(
+            z
+                .number({ message: "Engine CC must be a number" })
+                .int({ message: "Engine CC must be an integer" })
+                .positive({ message: "Engine CC must be greater than 0" }),
+        ).optional(),
 
         status: z
             .nativeEnum(VehicleStatus, {
@@ -122,14 +150,15 @@ export const updateVehicleSchema = z
             .trim()
             .optional(),
 
-        year: z
-            .number({ message: "Year must be a number" })
-            .int({ message: "Year must be an integer" })
-            .min(1950, { message: "Year must be 1950 or later" })
-            .max(new Date().getFullYear() + 1, {
-                message: "Year cannot be in the future",
-            })
-            .optional(),
+        year: coercedInt(
+            z
+                .number({ message: "Year must be a number" })
+                .int({ message: "Year must be an integer" })
+                .min(1950, { message: "Year must be 1950 or later" })
+                .max(new Date().getFullYear() + 1, {
+                    message: "Year cannot be in the future",
+                }),
+        ).optional(),
 
         plateNo: z
             .string({ message: "Plate number must be a string" })
@@ -151,45 +180,50 @@ export const updateVehicleSchema = z
             })
             .optional(),
 
-        seats: z
-            .number({ message: "Seats must be a number" })
-            .int({ message: "Seats must be an integer" })
-            .min(1, { message: "Seats must be at least 1" })
-            .max(100, { message: "Seats must not exceed 100" })
-            .optional(),
-
         fuelType: z
             .nativeEnum(Fuel, {
                 message: "Invalid fuel type",
             })
             .optional(),
 
-        pricePerDay: z
-            .number({ message: "Price per day must be a number" })
-            .positive({ message: "Price per day must be greater than 0" })
-            .max(100000, {
-                message: "Price per day seems unrealistically high",
-            })
-            .multipleOf(0.01, {
-                message: "Price can have at most 2 decimal places",
-            })
-            .optional(),
+        pricePerDay: coercedFloat(
+            z
+                .number({ message: "Price per day must be a number" })
+                .positive({ message: "Price per day must be greater than 0" })
+                .max(100000, {
+                    message: "Price per day seems unrealistically high",
+                })
+                .multipleOf(0.01, {
+                    message: "Price can have at most 2 decimal places",
+                }),
+        ).optional(),
 
-        mileage: z
-            .number({ message: "Mileage must be a number" })
-            .positive({ message: "Mileage must be greater than 0" })
-            .optional(),
+        seats: coercedInt(
+            z
+                .number({ message: "Seats must be a number" })
+                .int({ message: "Seats must be an integer" })
+                .min(1, { message: "Seats must be at least 1" })
+                .max(100, { message: "Seats must not exceed 100" }),
+        ).optional(),
 
-        range: z
-            .number({ message: "Range must be a number" })
-            .positive({ message: "Range must be greater than 0" })
-            .optional(),
+        mileage: coercedFloat(
+            z
+                .number({ message: "Mileage must be a number" })
+                .positive({ message: "Mileage must be greater than 0" }),
+        ).optional(),
 
-        engineCC: z
-            .number({ message: "Engine CC must be a number" })
-            .int({ message: "Engine CC must be an integer" })
-            .positive({ message: "Engine CC must be greater than 0" })
-            .optional(),
+        range: coercedFloat(
+            z
+                .number({ message: "Range must be a number" })
+                .positive({ message: "Range must be greater than 0" }),
+        ).optional(),
+
+        engineCC: coercedInt(
+            z
+                .number({ message: "Engine CC must be a number" })
+                .int({ message: "Engine CC must be an integer" })
+                .positive({ message: "Engine CC must be greater than 0" }),
+        ).optional(),
 
         status: z
             .nativeEnum(VehicleStatus, {

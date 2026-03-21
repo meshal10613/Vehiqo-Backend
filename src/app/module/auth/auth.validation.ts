@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Gender } from "../../../generated/prisma/enums";
 
 const registerUserSchema = z
     .object({
@@ -11,7 +12,20 @@ const registerUserSchema = z
         password: z
             .string()
             .min(8, "Password must be at least 8 characters")
-            .max(100, "Password is too long"),
+            .max(100, "Password is too long")
+            .regex(
+                /[A-Z]/,
+                "Password must contain at least one uppercase letter",
+            )
+            .regex(
+                /[a-z]/,
+                "Password must contain at least one lowercase letter",
+            )
+            .regex(/[0-9]/, "Password must contain at least one number")
+            .regex(
+                /[@$!%*?&]/,
+                "Password must contain at least one special character (@, $, !, %, *, ?, &)",
+            ),
     })
     .strict();
 
@@ -54,9 +68,14 @@ export const updateUserSchema = z
                 message: "NID number must be 10 or 13 digits",
             })
             .optional(),
+        gender: z.nativeEnum(Gender, { message: "Invalid gender" }).optional(),
     })
     .refine((data) => Object.keys(data).length > 0 || true, {
         message: "At least one field must be provided for update",
     });
 
-export const authValidation = { registerUserSchema, loginUserSchema, updateUserSchema };
+export const authValidation = {
+    registerUserSchema,
+    loginUserSchema,
+    updateUserSchema,
+};

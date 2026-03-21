@@ -38,12 +38,21 @@ router.patch(
     authController.updateUser,
 );
 
-router.patch("/update-role", checkAuth(UserRole.ADMIN), authController.updateRole);
+router.patch(
+    "/update-role",
+    checkAuth(UserRole.ADMIN),
+    authController.updateRole,
+);
 
 router.post("/verify-email", authController.verifyEmail);
 router.post("/forgot-password", authController.forgetPassword);
 router.post("/reset-password", authController.resetPassword);
 
+router.delete(
+    "/delete-account/:id",
+    checkAuth(UserRole.ADMIN),
+    authController.deleteUser,
+);
 router.post(
     "/logout",
     checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),

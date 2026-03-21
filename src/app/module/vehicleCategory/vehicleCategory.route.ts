@@ -3,8 +3,8 @@ import { validateRequest } from "../../middleware/validateRequest";
 import {
     createVehicleCategorySchema,
     updateVehicleCategorySchema,
-} from "./vehicelCategory.validation";
-import { vehicleCategoryController } from "./vehicelCategory.controller";
+} from "./vehicleCategory.validation";
+import { vehicleCategoryController } from "./vehicleCategory.controller";
 import { multerUpload } from "../../config/multer";
 import { checkAuth } from "../../middleware/checkAuth";
 import { UserRole } from "../../../generated/prisma/enums";

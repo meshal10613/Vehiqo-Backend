@@ -6,6 +6,7 @@ import { authService } from "./auth.service";
 import { tokenUtils } from "../../utils/token";
 import { CookieUtils } from "../../utils/cookie";
 import AppError from "../../errorHelper/AppError";
+import { IRequestUser } from "../../interface/requestUser.interface";
 
 const registerUser = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
@@ -163,7 +164,7 @@ const updateRole = catchAsync(
             data: result,
         });
     },
-)
+);
 
 const verifyEmail = catchAsync(
     async (req: Request, res: Response, next: NextFunction) => {
@@ -200,6 +201,20 @@ const resetPassword = catchAsync(
             httpStatusCode: status.OK,
             success: true,
             message: "Password reset successfully",
+        });
+    },
+);
+
+const deleteUser = catchAsync(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const { id } = req.params;
+        const user = req.user;
+        await authService.deleteUser(id as string, user as IRequestUser);
+
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "User deleted successfully",
         });
     },
 );
@@ -244,5 +259,6 @@ export const authController = {
     verifyEmail,
     forgetPassword,
     resetPassword,
+    deleteUser,
     logoutUser,
 };

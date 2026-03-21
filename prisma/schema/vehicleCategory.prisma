@@ -4,5 +4,8 @@ model VehicleCategory {
     image       String?
     description String?
 
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
     types VehicleType[]
 }

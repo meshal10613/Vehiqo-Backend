@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+const booleanFromString = z.preprocess(
+    (val) => {
+        if (typeof val === "boolean") return val;
+        if (val === "true") return true;
+        if (val === "false") return false;
+        return val; // let zod handle invalid values
+    },
+    z.boolean({ message: "must be a boolean" }),
+);
+
 export const createVehicleTypeSchema = z
     .object({
         name: z
@@ -11,17 +21,8 @@ export const createVehicleTypeSchema = z
             .trim()
             .transform((val) => val.replace(/\s+/g, " ")),
 
-        isElectric: z
-            .boolean({
-                message: "isElectric must be a boolean",
-            })
-            .optional(),
-
-        requiresLicense: z
-            .boolean({
-                message: "requiresLicense must be a boolean",
-            })
-            .optional(),
+        isElectric: booleanFromString.optional(),
+        requiresLicense: booleanFromString.optional(),
 
         categoryId: z
             .string({
@@ -45,17 +46,8 @@ export const updateVehicleTypeSchema = z
             .transform((val) => val.replace(/\s+/g, " "))
             .optional(),
 
-        isElectric: z
-            .boolean({
-                message: "isElectric must be a boolean",
-            })
-            .optional(),
-
-        requiresLicense: z
-            .boolean({
-                message: "requiresLicense must be a boolean",
-            })
-            .optional(),
+        isElectric: booleanFromString.optional(), // ✅ "true"/"false" → boolean
+        requiresLicense: booleanFromString.optional(),
 
         categoryId: z
             .string({

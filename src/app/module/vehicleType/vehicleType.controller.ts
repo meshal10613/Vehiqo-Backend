@@ -2,6 +2,7 @@ import status from "http-status";
 import { catchAsync } from "../../shared/catchAsync";
 import { sendResponse } from "../../shared/sendResponse";
 import { vehicleTypeService } from "./vehicleType.service";
+import { IQueryParams } from "../../interface/query.interface";
 
 const createVehicleType = catchAsync(async (req, res, next) => {
     const payload = req.body;
@@ -20,13 +21,15 @@ const createVehicleType = catchAsync(async (req, res, next) => {
 });
 
 const getAllVehicleTypes = catchAsync(async (req, res) => {
-    const result = await vehicleTypeService.getAllVehicleTypes();
+    const query = req.query;
+    const result = await vehicleTypeService.getAllVehicleTypes(query as IQueryParams);
 
     sendResponse(res, {
         httpStatusCode: status.OK,
         success: true,
         message: "Vehicle types retrieved successfully",
-        data: result,
+        data: result.data,
+        meta: result.meta,
     });
 });
 

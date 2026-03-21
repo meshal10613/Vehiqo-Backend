@@ -110,7 +110,7 @@ const getMe = async (user: IRequestUser) => {
 };
 
 const getNewToken = async (refreshToken: string, sessionToken: string) => {
-    const isSessionTokenExists = await prisma.session.findUnique({
+    const isSessionTokenExists = await prisma.session.findFirst({
         where: {
             token: sessionToken,
         },
@@ -156,7 +156,7 @@ const getNewToken = async (refreshToken: string, sessionToken: string) => {
 
     const { token } = await prisma.session.update({
         where: {
-            token: sessionToken,
+            id: isSessionTokenExists.id,
         },
         data: {
             token: sessionToken,
@@ -261,18 +261,6 @@ const updateUser = async (payload: IUpdateUserPayload, user: IRequestUser) => {
     const result = await prisma.user.update({
         where: { id: user.userId },
         data: payload,
-        select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-            mobileNumber: true,
-            licenseNumber: true,
-            nidNumber: true,
-            role: true,
-            createdAt: true,
-            updatedAt: true,
-        },
     });
 
     return result;
@@ -442,6 +430,24 @@ const resetPassword = async (
     });
 };
 
+const deleteUser = async (id: string, user: IRequestUser) => {
+    if (user.userId === id) {
+        throw new AppError(status.FORBIDDEN, "You cannot delete yourself");
+    }
+
+    const targetUser = await prisma.user.findUnique({
+        where: { id },
+    });
+
+    if (!targetUser) {
+        throw new AppError(status.NOT_FOUND, "User not found");
+    }
+
+    await prisma.user.delete({
+        where: { id },
+    });
+};
+
 const logoutUser = async (sessionToken: string) => {
     const result = await auth.api.signOut({
         headers: new Headers({
@@ -463,5 +469,6 @@ export const authService = {
     verifyEmail,
     forgetPassword,
     resetPassword,
+    deleteUser,
     logoutUser,
 };

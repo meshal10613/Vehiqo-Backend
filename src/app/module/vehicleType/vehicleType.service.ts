@@ -1,8 +1,18 @@
 import status from "http-status";
 import AppError from "../../errorHelper/AppError";
 import { prisma } from "../../lib/prisma";
-import { ICreateVehicleTypePayload, IUpdateVehicleTypePayload } from "./vehicleType.validation";
+import {
+    ICreateVehicleTypePayload,
+    IUpdateVehicleTypePayload,
+} from "./vehicleType.validation";
 import { deleteFileFromCloudinary } from "../../config/cloudinary";
+import { IQueryParams } from "../../interface/query.interface";
+import { QueryBuilder } from "../../utils/QueryBuilder";
+import { Prisma, VehicleType } from "../../../generated/prisma/client";
+import {
+    vehicleTypeFilterableFields,
+    vehicleTypeSearchableFields,
+} from "./vehicleType.constant";
 
 const createVehicleType = async (payload: ICreateVehicleTypePayload) => {
     const isExist = await prisma.vehicleType.findUnique({
@@ -21,13 +31,33 @@ const createVehicleType = async (payload: ICreateVehicleTypePayload) => {
     return result;
 };
 
-const getAllVehicleTypes = async () => {
-    const result = await prisma.vehicleType.findMany({
-        include: {
-            category: true,
-        },
+const getAllVehicleTypes = async (query: IQueryParams) => {
+    const queryBuilder = new QueryBuilder<
+        VehicleType,
+        Prisma.VehicleTypeWhereInput,
+        Prisma.VehicleTypeInclude
+    >(prisma.vehicleType, query, {
+        filterableFields: vehicleTypeFilterableFields,
+        searchableFields: vehicleTypeSearchableFields,
     });
 
+    await queryBuilder
+        .search()
+        .filter()
+        .include({
+            category: true,
+            vehicles: {
+                include: {
+                    bookings: true,
+                    reviews: true,
+                },
+            },
+        })
+        .sort()
+        .fields()
+        .paginate();
+
+    const result = await queryBuilder.execute();
     return result;
 };
 

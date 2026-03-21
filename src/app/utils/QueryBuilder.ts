@@ -46,7 +46,6 @@ export class QueryBuilder<
     search(): this {
         if (!this.queryParams) return this;
         const { searchTerm } = this.queryParams;
-        console.log(searchTerm);
         const { searchableFields } = this.config;
         // doctorSearchableFields = ['user.name', 'user.email', 'specialties.specialty.title' , 'specialties.specialty.description']
         if (searchTerm && searchableFields && searchableFields.length > 0) {
@@ -422,8 +421,6 @@ export class QueryBuilder<
     }
 
     async execute(): Promise<IQueryResult<T>> {
-        console.log("query:", JSON.stringify(this.query, null, 2));
-        console.log("countQuery:", JSON.stringify(this.countQuery, null, 2));
         const [total, data] = await Promise.all([
             this.model.count(
                 this.countQuery as Parameters<typeof this.model.count>[0],

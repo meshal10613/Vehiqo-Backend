@@ -1,7 +1,8 @@
 import status from "http-status";
 import { catchAsync } from "../../shared/catchAsync";
 import { sendResponse } from "../../shared/sendResponse";
-import { vehicleCategoryService } from "./vehicelCategory.service";
+import { vehicleCategoryService } from "./vehicleCategory.service";
+import { IQueryParams } from "../../interface/query.interface";
 
 const createVehicleCategory = catchAsync(async (req, res, next) => {
     const payload = req.body;
@@ -20,13 +21,17 @@ const createVehicleCategory = catchAsync(async (req, res, next) => {
 });
 
 const getAllVehicleCategory = catchAsync(async (req, res) => {
-    const result = await vehicleCategoryService.getAllVehicleCategory();
+    const query = req.query;
+    const result = await vehicleCategoryService.getAllVehicleCategory(
+        query as IQueryParams,
+    );
 
     sendResponse(res, {
         httpStatusCode: status.OK,
         success: true,
         message: "Vehicle categories retrieved successfully",
-        data: result,
+        data: result.data,
+        meta: result.meta,
     });
 });
 
@@ -70,9 +75,7 @@ const updateVehicleCategory = catchAsync(async (req, res) => {
 const deleteVehicleCategory = catchAsync(async (req, res) => {
     const { id } = req.params;
 
-    await vehicleCategoryService.deleteVehicleCategory(
-        id as string,
-    );
+    await vehicleCategoryService.deleteVehicleCategory(id as string);
 
     sendResponse(res, {
         httpStatusCode: status.OK,
