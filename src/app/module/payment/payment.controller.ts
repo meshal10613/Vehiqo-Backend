@@ -1,26 +1,61 @@
 import { Request, Response } from "express";
-import { status } from "http-status";
+import status from "http-status"; // default import — NOT named { status }
 import { envVars } from "../../config/env";
 import { catchAsync } from "../../shared/catchAsync";
 import { sendResponse } from "../../shared/sendResponse";
 import { paymentService } from "./payment.service";
 import { stripe } from "../../config/stripe";
 import { IQueryParams } from "../../interface/query.interface";
+import {
+    createSessionSchema,
+    createRemainingSessionSchema,
+} from "./payment.validation";
+import { IRequestUser } from "../../interface/requestUser.interface";
+
+// ── Advance payment session ───────────────────────────────────────────────────
 
 const createSession = catchAsync(async (req: Request, res: Response) => {
-    const { bookingId } = req.params;
+    const { bookingId } = createSessionSchema.parse(req.body);
 
     const result = await paymentService.createAdvancePaymentSession(
-        bookingId as string,
+        bookingId,
+        req.user,
     );
 
     sendResponse(res, {
         httpStatusCode: status.OK,
         success: true,
         message: "Checkout session created successfully",
-        data: result, // { sessionId, sessionUrl, paymentId }
+        data: result,
     });
 });
+
+
+const createRemainingSession = catchAsync(
+    async (req: Request, res: Response) => {
+        const { bookingId } = createSessionSchema.parse(req.body);
+
+        const result = await paymentService.createRemainingPaymentSession(
+            bookingId,
+            req.user,
+        );
+
+        sendResponse(res, {
+            httpStatusCode: status.OK,
+            success: true,
+            message: "Remaining payment session created successfully",
+            data: result,
+        });
+    },
+);
+
+// ── Stripe webhook ────────────────────────────────────────────────────────────
+// No auth middleware on this route — requests come from Stripe, not a logged-in
+// user. Authenticity is verified by constructEvent() using the webhook secret.
+//
+// IMPORTANT: This route must receive the raw request body (Buffer), not the
+// JSON-parsed body. Ensure express.raw() is applied to this route BEFORE
+// express.json() in your app entry point (already confirmed as set up).
 
 const handleWebhook = catchAsync(async (req: Request, res: Response) => {
     const signature = req.headers["stripe-signature"] as string;
@@ -35,6 +70,7 @@ const handleWebhook = catchAsync(async (req: Request, res: Response) => {
 
     let event;
     try {
+        // req.body must be a raw Buffer here — express.raw() is required
         event = stripe.webhooks.constructEvent(
             req.body,
             signature,
@@ -57,6 +93,9 @@ const handleWebhook = catchAsync(async (req: Request, res: Response) => {
             data: result,
         });
     } catch (error) {
+        // Always return 200 to Stripe even on handler errors — returning non-2xx
+        // will cause Stripe to retry the event indefinitely, which is worse than
+        // logging the failure and investigating manually.
         console.error("[WEBHOOK] Handler error:", error);
         sendResponse(res, {
             httpStatusCode: status.OK,
@@ -66,11 +105,12 @@ const handleWebhook = catchAsync(async (req: Request, res: Response) => {
     }
 });
 
-const getPaymentsByBooking = catchAsync(async (req: Request, res: Response) => {
-    const { bookingId } = req.params;
+// ── Queries ───────────────────────────────────────────────────────────────────
 
+const getPaymentsByBooking = catchAsync(async (req: Request, res: Response) => {
     const payments = await paymentService.getPaymentsByBooking(
-        bookingId as string,
+        req.params.bookingId as string,
+        req.user,
     );
 
     sendResponse(res, {
@@ -82,9 +122,10 @@ const getPaymentsByBooking = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getPaymentById = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
-
-    const payment = await paymentService.getPaymentById(id as string);
+    const payment = await paymentService.getPaymentById(
+        req.params.id as string,
+        req.user,
+    );
 
     sendResponse(res, {
         httpStatusCode: status.OK,
@@ -94,21 +135,55 @@ const getPaymentById = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const getMyPayments = catchAsync(async (req: Request, res: Response) => {
+    const payments = await paymentService.getMyPayments(
+        req.user as IRequestUser,
+        req.query as IQueryParams,
+    );
+
+    sendResponse(res, {
+        httpStatusCode: status.OK,
+        success: true,
+        message: "My payments fetched successfully",
+        data: payments.data,
+        meta: payments.meta,
+    });
+});
+
 const getAllPayments = catchAsync(async (req: Request, res: Response) => {
-    const payments = await paymentService.getAllPayments(req.query as IQueryParams);
+    const payments = await paymentService.getAllPayments(
+        req.query as IQueryParams,
+    );
 
     sendResponse(res, {
         httpStatusCode: status.OK,
         success: true,
         message: "Payments fetched successfully",
-        data: payments,
+        data: payments.data,
+        meta: payments.meta,
+    });
+});
+
+const deletePayment = catchAsync(async (req: Request, res: Response) => {
+    const payments = await paymentService.deletePayment(
+        req.params.id as string,
+    );
+
+    sendResponse(res, {
+        httpStatusCode: status.OK,
+        success: true,
+        message: "Payments deleted successfully",
+        data: null
     });
 });
 
 export const paymentController = {
     createSession,
+    createRemainingSession,
     handleWebhook,
     getPaymentsByBooking,
     getPaymentById,
+    getMyPayments,
     getAllPayments,
+    deletePayment,
 };

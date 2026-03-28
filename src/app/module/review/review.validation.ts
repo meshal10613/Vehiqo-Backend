@@ -16,7 +16,7 @@ export const createReviewSchema = z
             .max(500, { message: "Comment must not exceed 500 characters" })
             .trim(),
 
-        vehicleId: z
+        bookingId: z
             .string({ message: "Vehicle ID must be a string" })
             .uuid({ message: "Vehicle ID must be a valid UUID" }),
     })

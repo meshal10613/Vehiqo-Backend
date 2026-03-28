@@ -1,21 +1,24 @@
 import { Router } from "express";
-import { paymentController } from "./payment.controller";
-import { checkAuth } from "../../middleware/checkAuth";
 import { UserRole } from "../../../generated/prisma/enums";
+import { checkAuth } from "../../middleware/checkAuth";
+import { paymentController } from "./payment.controller";
 
 const router = Router();
 
 router.post(
-    "/create-session/:bookingId",
+    "/create-session",
     checkAuth(UserRole.CUSTOMER),
     paymentController.createSession,
 );
 
 router.post(
-    "/webhook",
+    "/create-remaining-session",
     checkAuth(UserRole.CUSTOMER),
-    paymentController.handleWebhook,
+    paymentController.createRemainingSession,
 );
+
+router.get("/", checkAuth(UserRole.ADMIN), paymentController.getAllPayments);
+router.get("/my-payment", checkAuth(UserRole.CUSTOMER), paymentController.getMyPayments);
 
 router.get(
     "/booking/:bookingId",
@@ -29,6 +32,10 @@ router.get(
     paymentController.getPaymentById,
 );
 
-router.get("/", checkAuth(UserRole.ADMIN), paymentController.getAllPayments);
+router.delete(
+    "/:id",
+    checkAuth(UserRole.ADMIN),
+    paymentController.deletePayment,
+);
 
 export const paymentRoutes = router;

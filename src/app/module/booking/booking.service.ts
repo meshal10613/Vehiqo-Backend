@@ -1,37 +1,55 @@
 import status from "http-status";
-import { VehicleStatus } from "../../../generated/prisma/enums";
+import {
+    BookingStatus,
+    UserRole,
+    VehicleStatus,
+} from "../../../generated/prisma/enums";
 import AppError from "../../errorHelper/AppError";
 import { IRequestUser } from "../../interface/requestUser.interface";
 import { prisma } from "../../lib/prisma";
 import {
+    IAdminUpdateBooking,
     ICreateBookingPayload,
-    IUpdateBookingPayload,
+    ICustomerUpdateBooking,
 } from "./booking.validation";
-import { Prisma } from "../../../generated/prisma/client";
+import { Booking, Prisma } from "../../../generated/prisma/client";
 import { differenceInCalendarDays } from "date-fns";
+import { IQueryParams } from "../../interface/query.interface";
+import { QueryBuilder } from "../../utils/QueryBuilder";
+import {
+    bookingFilterableFields,
+    bookingSearchableFields,
+} from "./booking.constant";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createBooking
+// ─────────────────────────────────────────────────────────────────────────────
+// Flow:
+//   1. Validate vehicle is AVAILABLE and customer holds a valid license (if required)
+//   2. Compute totalDays / baseCost server-side — never trust the client
+//   3. Create the booking in PENDING status
+//   4. Vehicle stays AVAILABLE at this point — it only becomes BOOKED after the
+//      advance payment webhook confirms (handled in the payment service).
+//      This prevents a failed/abandoned Stripe session from locking the vehicle.
+// ─────────────────────────────────────────────────────────────────────────────
 
 const createBooking = async (
     payload: ICreateBookingPayload,
     user: IRequestUser,
 ) => {
-    const { vehicleId, startDate, endDate, advanceAmount, ...rest } = payload;
+    const { vehicleId, startDate, endDate, advanceAmount, notes } = payload;
 
     const start = new Date(startDate);
-    const end   = new Date(endDate);
+    const end = new Date(endDate);
 
-    // ── 1. Fetch vehicle + user in parallel ───────────────────────────────────
-    // Original code fired 3 sequential queries (vehicle → user → create+update).
-    // Promise.all runs the two independent reads concurrently, cutting wait time
-    // roughly in half before we even touch the write path.
+    // ── 1. Fetch vehicle + customer concurrently ──────────────────────────────
     const [vehicle, customer] = await Promise.all([
         prisma.vehicle.findUnique({
             where: { id: vehicleId },
             select: {
-                status:      true,
+                status: true,
                 pricePerDay: true,
-                vehicleType: {
-                    select: { requiresLicense: true },
-                },
+                vehicleType: { select: { requiresLicense: true } },
             },
         }),
         prisma.user.findUnique({
@@ -40,7 +58,7 @@ const createBooking = async (
         }),
     ]);
 
-    // ── 2. Guard: vehicle exists & available ──────────────────────────────────
+    // ── 2. Guards ─────────────────────────────────────────────────────────────
     if (!vehicle) {
         throw new AppError(status.NOT_FOUND, "Vehicle not found");
     }
@@ -55,260 +73,487 @@ const createBooking = async (
     if (vehicle.vehicleType.requiresLicense && !customer?.licenseNumber) {
         throw new AppError(
             status.BAD_REQUEST,
-            "A valid license is required to book this vehicle",
+            "A valid driver's license is required to book this vehicle",
         );
     }
 
-    const totalDays = differenceInCalendarDays(end, start);
-    const baseCost  = vehicle.pricePerDay * totalDays;
+    // ── 3. Derived fields ─────────────────────────────────────────────────────
+    // totalDays uses Math.ceil so a booking from Aug 1 → Aug 1 23:59 still
+    // counts as 1 day, not 0.  differenceInCalendarDays already returns an
+    // integer, but we keep the Math.max(1, ...) guard for safety.
+    const totalDays = Math.max(1, differenceInCalendarDays(end, start));
+    const baseCost = vehicle.pricePerDay * totalDays;
 
-    const [booking] = await prisma.$transaction([
-        prisma.booking.create({
-            data: {
-                startDate:    start,
-                endDate:      end,
-                pricePerDay:  vehicle.pricePerDay,
-                totalDays,
-                baseCost,
-                totalCost:    baseCost,   // no surcharges yet at booking time
-                remainingDue: baseCost - (advanceAmount ?? 0),
-                advanceAmount: advanceAmount ?? 0,
-                vehicleId,
-                customerId:   user.userId,
-                ...rest,
-            },
-        }),
-        prisma.vehicle.update({
-            where: { id: vehicleId },
-            data:  { status: VehicleStatus.BOOKED },
-        }),
-    ]);
+    // advanceAmount must not exceed the full base cost
+    if (advanceAmount > baseCost) {
+        throw new AppError(
+            status.BAD_REQUEST,
+            `Advance amount (৳${advanceAmount}) cannot exceed total base cost (৳${baseCost})`,
+        );
+    }
+
+    // ── 4. Persist ────────────────────────────────────────────────────────────
+    // Vehicle status is NOT changed here — it changes to BOOKED only after the
+    // advance payment webhook confirms (see payment service).
+    const booking = await prisma.booking.create({
+        data: {
+            startDate: start,
+            endDate: end,
+            pricePerDay: vehicle.pricePerDay,
+            totalDays,
+            baseCost,
+            totalCost: baseCost, // no surcharges yet
+            advanceAmount,
+            remainingDue: baseCost - advanceAmount,
+            notes,
+            vehicleId,
+            customerId: user.userId,
+        },
+    });
+
+    await prisma.vehicle.update({
+        where: { id: vehicleId },
+        data: { status: VehicleStatus.BOOKED },
+    });
 
     return booking;
 };
 
-const getAllBooking = async () => {
-    const result = await prisma.booking.findMany({
-        include: {
-            vehicle: {
-                include: {
-                    vehicleType: true,
-                    fuel: true,
-                },
-            },
+const getAllBooking = async (query: IQueryParams) => {
+    const queryBuilder = new QueryBuilder<
+        Booking,
+        Prisma.BookingWhereInput,
+        Prisma.BookingInclude
+    >(prisma.booking, query, {
+        searchableFields: bookingSearchableFields,
+        filterableFields: bookingFilterableFields,
+    });
+
+    const result = await queryBuilder
+        .search()
+        .filter()
+        .include({
+            vehicle: true,
             customer: true,
-        },
-    });
+            payments: true,
+        })
+        // .dynamicInclude(doctorIncludeConfig)
+        .paginate()
+        .sort()
+        .fields()
+        .execute();
+
     return result;
 };
 
-const getMyBooking = async (user: IRequestUser) => {
-    const result = await prisma.booking.findMany({
-        where: {
-            customerId: user.userId,
-        },
-        include: {
-            vehicle: {
-                include: {
-                    vehicleType: true,
-                    fuel: true,
-                },
-            },
-        },
+const getMyBooking = async (user: IRequestUser, query: IQueryParams) => {
+    const queryBuilder = new QueryBuilder<
+        Booking,
+        Prisma.BookingWhereInput,
+        Prisma.BookingInclude
+    >(prisma.booking, query, {
+        searchableFields: bookingSearchableFields,
+        filterableFields: bookingFilterableFields,
     });
+
+    const result = await queryBuilder
+        .search()
+        .filter()
+        .where({ customerId: user.userId })
+        .include({
+            vehicle: true,
+            customer: true,
+            payments: true,
+        })
+        // .dynamicInclude(doctorIncludeConfig)
+        .paginate()
+        .sort()
+        .fields()
+        .execute();
+
     return result;
 };
 
-export const updateBooking = async (
+// ─────────────────────────────────────────────────────────────────────────────
+// updateBooking
+// ─────────────────────────────────────────────────────────────────────────────
+// Role-aware: the controller passes the validated payload and the caller's role.
+// Admin payload  → IAdminUpdateBooking   (all fields)
+// Customer payload → ICustomerUpdateBooking (notes + CANCELLED only)
+//
+// Business rules enforced here:
+//   • Customer cannot cancel once booking is CONFIRMED (advance paid)
+//   • extraDays / lateFee are always server-computed — never from payload
+//   • fuelLevelReturn triggers automatic fuelCharge / fuelCredit computation
+//     if fuelLevelPickup is also present
+// ─────────────────────────────────────────────────────────────────────────────
+
+const updateBooking = async (
     bookingId: string,
-    payload: IUpdateBookingPayload,
+    payload: IAdminUpdateBooking | ICustomerUpdateBooking,
+    callerRole: UserRole,
 ) => {
-    // ── 1. Fetch the existing booking ─────────────────────────────────────────
-    // We need the full existing record so we can:
-    //   a) Confirm the booking exists
-    //   b) Fall back to stored values for any field not present in the payload
-    //      (partial update — only the fields the caller sends should change)
+    // ── 1. Load existing booking ──────────────────────────────────────────────
     const existing = await prisma.booking.findUnique({
         where: { id: bookingId },
+        include: { vehicle: { select: { pricePerDay: true } } },
     });
 
     if (!existing) {
         throw new AppError(status.NOT_FOUND, "Booking not found");
     }
 
-    // ── 2. Resolve effective values ───────────────────────────────────────────
-    // For every field that drives a calculation we "resolve" the effective value:
-    //   payload value  →  if the caller sent it, use that (they're updating it)
-    //   existing value →  otherwise keep what's already stored in the DB
-    //
-    // This ensures partial updates stay consistent — e.g. if only endDate is
-    // sent, we still have the correct startDate for recalculating totalDays.
+    // ── 2. Role-based guards ──────────────────────────────────────────────────
 
-    const effectiveStartDate  = payload.startDate    ?? existing.startDate;
-    const effectiveEndDate    = payload.endDate      ?? existing.endDate;
-    const effectiveReturnedAt = payload.returnedAt   ?? existing.returnedAt ?? null;
-    const effectivePricePerDay = payload.pricePerDay ?? existing.pricePerDay;
-    const effectiveAdvanceAmount = payload.advanceAmount ?? existing.advanceAmount ?? 0;
+    if (callerRole === UserRole.CUSTOMER) {
+        const customerPayload = payload as ICustomerUpdateBooking;
 
-    // ── 3. Determine whether a cost recalculation is needed ───────────────────
-    // Recalculation is triggered when ANY of these change:
-    //   • startDate       — changes the rental window length
-    //   • endDate         — changes the rental window length AND the late-fee baseline
-    //   • pricePerDay     — changes baseCost, lateFee, and therefore totalCost
-    //   • returnedAt      — may introduce or clear a late-fee if it crosses endDate
-    //   • advanceAmount   — changes remainingDue
-    //   • fuelCharge / fuelCredit / damageCharge — directly affect totalCost
-    //
-    // If none of the above are in the payload we skip recalculation entirely
-    // and just do a plain field update (e.g. updating only `notes` or `status`).
-    const needsRecalculation =
-        payload.startDate      !== undefined ||
-        payload.endDate        !== undefined ||
-        payload.pricePerDay    !== undefined ||
-        payload.returnedAt     !== undefined ||
-        payload.advanceAmount  !== undefined ||
-        payload.fuelCharge     !== undefined ||
-        payload.fuelCredit     !== undefined ||
-        payload.damageCharge   !== undefined;
-
-    // ── 4. Recalculated fields (only populated when needsRecalculation = true) ─
-    let computedFields: Partial<{
-        totalDays:    number;
-        baseCost:     number;
-        extraDays:    number;
-        lateFee:      number;
-        totalCost:    number;
-        remainingDue: number;
-    }> = {};
-
-    if (needsRecalculation) {
-
-        // ── 4a. Validate resolved date window ─────────────────────────────────
-        // Even though Zod already checks the incoming payload, the *resolved*
-        // window (mixing payload + existing values) could still be invalid.
-        // Example: existing startDate = Aug 10, payload endDate = Aug 5 → invalid.
-        if (effectiveStartDate && effectiveEndDate) {
-            if (effectiveEndDate <= effectiveStartDate) {
+        // Customer can only cancel while still PENDING (before advance is paid)
+        if (customerPayload.status === BookingStatus.CANCELLED) {
+            if (existing.status !== BookingStatus.PENDING) {
                 throw new AppError(
-                    status.BAD_REQUEST,
-                    "End date must be after start date",
+                    status.FORBIDDEN,
+                    "Booking cannot be cancelled after the advance payment has been made",
                 );
             }
+
+            // On customer cancellation, restore vehicle to AVAILABLE
+            const [updated] = await prisma.$transaction([
+                prisma.booking.update({
+                    where: { id: bookingId },
+                    data: {
+                        status: BookingStatus.CANCELLED,
+                        cancelledAt: new Date(),
+                        cancelledBy: existing.customerId,
+                        cancellationReason: "Cancelled by customer",
+                        notes: customerPayload.notes ?? existing.notes,
+                    },
+                }),
+                prisma.vehicle.update({
+                    where: { id: existing.vehicleId },
+                    data: { status: VehicleStatus.AVAILABLE },
+                }),
+            ]);
+
+            return updated;
         }
 
-        // ── 4b. totalDays & baseCost ──────────────────────────────────────────
-        // totalDays = number of calendar days in the agreed rental window
-        //             (from startDate to endDate, NOT including any overstay)
-        // baseCost  = totalDays × pricePerDay
-        //             (the core rental charge before any surcharges)
-        const totalDays =
-            effectiveStartDate && effectiveEndDate
-                ? differenceInCalendarDays(effectiveEndDate, effectiveStartDate)
-                : existing.totalDays; // dates not set yet — keep existing value
+        if (customerPayload.status === BookingStatus.PICKED_UP) {
+            const [updated] = await prisma.$transaction([
+                prisma.booking.update({
+                    where: { id: bookingId },
+                    data: {
+                        status: BookingStatus.PICKED_UP,
+                        pickedUpAt: payload.pickedUpAt ?? new Date(),
+                    },
+                }),
+                prisma.vehicle.update({
+                    where: { id: existing.vehicleId },
+                    data: { status: VehicleStatus.RENTED },
+                }),
+            ]);
 
+            return updated;
+        }
+
+        if (customerPayload.status === BookingStatus.RETURNED) {
+            const returnedAt = customerPayload.returnedAt
+                ? new Date(customerPayload.returnedAt)
+                : new Date();
+
+            const pickupAnchor = existing.pickedUpAt
+                ? new Date(existing.pickedUpAt)
+                : new Date(existing.startDate);
+
+            // ── Total days: minimum 1 regardless of how soon customer returns ─────
+            const rawDays = differenceInCalendarDays(returnedAt, pickupAnchor);
+            const totalDays = Math.max(1, rawDays);
+
+            const pricePerDay = existing.pricePerDay;
+            const baseCost = totalDays * pricePerDay;
+
+            // ── Late fee: each day beyond endDate → 1.2 × pricePerDay ────────────
+            let extraDays = 0;
+            let lateFee = 0;
+
+            if (returnedAt > new Date(existing.endDate)) {
+                extraDays = differenceInCalendarDays(
+                    returnedAt,
+                    new Date(existing.endDate),
+                );
+                lateFee = extraDays * pricePerDay * 1.2;
+            }
+
+            // ── Preserve existing fuel/damage values — admin handles these later ──
+            const fuelCharge = existing.fuelCharge ?? 0;
+            const fuelCredit = existing.fuelCredit ?? 0;
+            const damageCharge = existing.damageCharge ?? 0;
+            const advanceAmount = existing.advanceAmount ?? 0;
+
+            // ── Final totals ──────────────────────────────────────────────────────
+            const totalCost =
+                baseCost + lateFee + fuelCharge + damageCharge - fuelCredit;
+            const remainingDue = Math.max(0, totalCost - advanceAmount);
+
+            if (remainingDue === 0) {
+                const [updated] = await prisma.$transaction([
+                    prisma.booking.update({
+                        where: { id: bookingId },
+                        data: {
+                            status: BookingStatus.COMPLETED,
+                            returnedAt,
+                            totalDays,
+                            baseCost,
+                            extraDays,
+                            lateFee,
+                            fuelCharge,
+                            fuelCredit,
+                            damageCharge,
+                            totalCost,
+                            remainingDue,
+                            notes: customerPayload.notes ?? existing.notes,
+                        },
+                    }),
+                    prisma.vehicle.update({
+                        where: { id: existing.vehicleId },
+                        data: { status: VehicleStatus.MAINTENANCE },
+                    }),
+                ]);
+
+                return updated;
+            }
+
+            const [updated] = await prisma.$transaction([
+                prisma.booking.update({
+                    where: { id: bookingId },
+                    data: {
+                        status: BookingStatus.RETURNED,
+                        returnedAt,
+                        totalDays,
+                        baseCost,
+                        extraDays,
+                        lateFee,
+                        fuelCharge,
+                        fuelCredit,
+                        damageCharge,
+                        totalCost,
+                        remainingDue,
+                        notes: customerPayload.notes ?? existing.notes,
+                    },
+                }),
+                prisma.vehicle.update({
+                    where: { id: existing.vehicleId },
+                    data: { status: VehicleStatus.MAINTENANCE },
+                }),
+            ]);
+
+            return updated;
+        }
+
+        // For non-cancel customer updates (notes only), just patch and return
+        return prisma.booking.update({
+            where: { id: bookingId },
+            data: { notes: customerPayload.notes },
+        });
+    }
+
+    // ── 3. Admin update path ──────────────────────────────────────────────────
+    const adminPayload = payload as IAdminUpdateBooking;
+
+    // ── 3a. Resolve effective values (payload ?? existing) ────────────────────
+    const effectiveStartDate = adminPayload.startDate ?? existing.startDate;
+    const effectiveEndDate = adminPayload.endDate ?? existing.endDate;
+    const effectiveReturnedAt =
+        adminPayload.returnedAt ?? existing.returnedAt ?? null;
+    const effectivePricePerDay =
+        adminPayload.pricePerDay ?? existing.pricePerDay;
+    const effectiveAdvance =
+        adminPayload.advanceAmount ?? existing.advanceAmount ?? 0;
+
+    // Fuel levels — use payload if provided, fall back to what's stored
+    const effectiveFuelPickup =
+        adminPayload.fuelLevelPickup ??
+        (existing as any).fuelLevelPickup ??
+        null;
+    const effectiveFuelReturn =
+        adminPayload.fuelLevelReturn ??
+        (existing as any).fuelLevelReturn ??
+        null;
+
+    // ── 3b. Decide if recalculation is needed ─────────────────────────────────
+    const needsRecalculation =
+        adminPayload.startDate !== undefined ||
+        adminPayload.endDate !== undefined ||
+        adminPayload.pricePerDay !== undefined ||
+        adminPayload.returnedAt !== undefined ||
+        adminPayload.advanceAmount !== undefined ||
+        adminPayload.fuelLevelPickup !== undefined ||
+        adminPayload.fuelLevelReturn !== undefined ||
+        adminPayload.fuelCharge !== undefined ||
+        adminPayload.fuelCredit !== undefined ||
+        adminPayload.damageCharge !== undefined;
+
+    let computedFields: Prisma.BookingUpdateInput = {};
+
+    if (needsRecalculation) {
+        // ── 3c. Validate resolved window ──────────────────────────────────────
+        if (effectiveEndDate <= effectiveStartDate) {
+            throw new AppError(
+                status.BAD_REQUEST,
+                "End date must be after start date",
+            );
+        }
+
+        // ── 3d. totalDays & baseCost ──────────────────────────────────────────
+        const totalDays = Math.max(
+            1,
+            differenceInCalendarDays(effectiveEndDate, effectiveStartDate),
+        );
         const baseCost = totalDays * effectivePricePerDay;
 
-        // ── 4c. Late fee (extraDays & lateFee) ────────────────────────────────
-        // A late fee applies only when the vehicle is returned AFTER the agreed
-        // endDate.
-        //
-        // extraDays = returnedAt − endDate  (calendar days, integer)
-        //             only counted when returnedAt > endDate
-        //
-        // lateFee   = extraDays × pricePerDay × 1.2
-        //             The 1.2 multiplier applies a 20% penalty on top of the
-        //             normal daily rate for each day of overstay.
-        //
-        // If the vehicle is returned on time (returnedAt ≤ endDate) both values
-        // remain 0 — no late fee is charged.
+        // ── 3e. Late fee ──────────────────────────────────────────────────────
+        // Charged only when returnedAt > endDate (overstay).
+        // 20% penalty rate: extraDays × pricePerDay × 1.2
         let extraDays = 0;
-        let lateFee   = 0;
+        let lateFee = 0;
 
-        if (
-            effectiveReturnedAt &&
-            effectiveEndDate    &&
-            effectiveReturnedAt > effectiveEndDate
-        ) {
+        if (effectiveReturnedAt && effectiveReturnedAt > effectiveEndDate) {
             extraDays = differenceInCalendarDays(
                 effectiveReturnedAt,
                 effectiveEndDate,
             );
-            // 20% penalty rate on overstayed days
             lateFee = extraDays * effectivePricePerDay * 1.2;
         }
 
-        // ── 4d. Other return-time surcharges ──────────────────────────────────
-        // These are assessed when the vehicle is returned and recorded on the
-        // booking at that point. We resolve them the same way as other fields:
-        // payload value if provided, otherwise keep existing stored value.
+        // ── 3f. Fuel charge / credit ──────────────────────────────────────────
+        // If both fuel levels are known we auto-compute the charge/credit.
+        // Admin can still override by passing explicit fuelCharge / fuelCredit.
         //
-        // fuelCharge   — charged if vehicle is returned with less fuel than agreed
-        // fuelCredit   — credited if vehicle is returned with more fuel than agreed
-        // damageCharge — charged if any damage is found on return inspection
-        const fuelCharge   = payload.fuelCharge   ?? existing.fuelCharge   ?? 0;
-        const fuelCredit   = payload.fuelCredit   ?? existing.fuelCredit   ?? 0;
-        const damageCharge = payload.damageCharge ?? existing.damageCharge ?? 0;
+        // fuelCharge  → customer returned LESS fuel than they received
+        // fuelCredit  → customer returned MORE fuel than they received
+        //
+        // Rate: pricePerDay × 0.1 per percentage point of fuel difference
+        // (adjust the multiplier to match your fuel pricing policy)
+        let fuelCharge = adminPayload.fuelCharge ?? existing.fuelCharge ?? 0;
+        let fuelCredit = adminPayload.fuelCredit ?? existing.fuelCredit ?? 0;
+        const damageCharge =
+            adminPayload.damageCharge ?? existing.damageCharge ?? 0;
 
-        // ── 4e. totalCost ─────────────────────────────────────────────────────
-        // The full amount the customer owes for this booking:
-        //
-        //   totalCost = baseCost
-        //             + lateFee       (0 if returned on time)
-        //             + fuelCharge    (0 if fuel OK)
-        //             + damageCharge  (0 if no damage)
-        //             − fuelCredit    (0 if no excess fuel)
+        if (
+            effectiveFuelPickup !== null &&
+            effectiveFuelReturn !== null &&
+            // Only auto-compute if admin didn't explicitly pass charge/credit values
+            adminPayload.fuelCharge === undefined &&
+            adminPayload.fuelCredit === undefined
+        ) {
+            const diff = effectiveFuelReturn - effectiveFuelPickup; // positive = more returned
+            const ratePerPercent = effectivePricePerDay * 0.1;
+
+            if (diff < 0) {
+                // Returned with less fuel → charge the customer
+                fuelCharge = Math.abs(diff) * 100 * ratePerPercent;
+                fuelCredit = 0;
+            } else if (diff > 0) {
+                // Returned with more fuel → credit the customer
+                fuelCredit = diff * 100 * ratePerPercent;
+                fuelCharge = 0;
+            } else {
+                fuelCharge = 0;
+                fuelCredit = 0;
+            }
+        }
+
+        // ── 3g. totalCost & remainingDue ──────────────────────────────────────
         const totalCost =
-            baseCost     +
-            lateFee      +
-            fuelCharge   +
-            damageCharge -
-            fuelCredit;
+            baseCost + lateFee + fuelCharge + damageCharge - fuelCredit;
 
-        // ── 4f. remainingDue ──────────────────────────────────────────────────
-        // The balance still owed after the advance payment is deducted.
-        //
-        //   remainingDue = totalCost − advanceAmount
-        //
-        // Math.max(0, ...) ensures it never goes negative — if the advance
-        // somehow exceeds totalCost (e.g. after a fuelCredit) the customer
-        // owes nothing further (refund logic is handled separately if needed).
-        const remainingDue = Math.max(0, totalCost - effectiveAdvanceAmount);
+        const remainingDue = Math.max(0, totalCost - effectiveAdvance);
 
-        // ── 4g. Collect all computed fields ───────────────────────────────────
-        // These will be merged into the Prisma update below, overwriting any
-        // raw payload values for these fields (computed fields always win).
         computedFields = {
             totalDays,
             baseCost,
-            extraDays,   // server-computed from returnedAt vs endDate
-            lateFee,     // server-computed — never trusted from payload
+            extraDays,
+            lateFee,
+            fuelCharge,
+            fuelCredit,
+            damageCharge,
             totalCost,
             remainingDue,
         };
     }
 
-    // ── 5. Persist the update ─────────────────────────────────────────────────
-    // Spread order is intentional:
-    //   1. payload       — all fields the caller wants to change
-    //   2. computedFields — overrides the computed fields in payload if present
-    //                       (extraDays & lateFee must never come from the caller)
-    //
-    // Fields not in either spread (e.g. vehicleId, customerId) are untouched
-    // by Prisma's update — they stay exactly as stored.
+    // ── 3h. Handle admin cancellation ─────────────────────────────────────────
+    // When admin cancels, restore the vehicle to AVAILABLE regardless of
+    // current booking status.
+    if (adminPayload.status === BookingStatus.CANCELLED) {
+        const [updated] = await prisma.$transaction([
+            prisma.booking.update({
+                where: { id: bookingId },
+                data: {
+                    ...adminPayload,
+                    ...computedFields,
+                    cancelledAt: adminPayload.cancelledAt ?? new Date(),
+                    cancellationReason:
+                        adminPayload.cancellationReason ?? "Cancelled by admin",
+                } as Prisma.BookingUpdateInput,
+            }),
+            prisma.vehicle.update({
+                where: { id: existing.vehicleId },
+                data: { status: VehicleStatus.AVAILABLE },
+            }),
+        ]);
+        return updated;
+    }
+
+    // ── 3i. Standard admin update ─────────────────────────────────────────────
+    // Spread order: payload first, then computedFields — computed always wins.
+    // extraDays and lateFee from the payload are silently overridden this way.
     const updated = await prisma.booking.update({
         where: { id: bookingId },
         data: {
-            ...payload,
-            ...computedFields, // computed fields always win over raw payload
+            ...adminPayload,
+            ...computedFields, // computed fields always win
         } as Prisma.BookingUpdateInput,
     });
 
     return updated;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// getSingleBooking
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getSingleBooking = async (bookingId: string, user: IRequestUser) => {
+    const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+            vehicle: true,
+            customer: true,
+            payments: true,
+        },
+    });
+
+    if (!booking) {
+        throw new AppError(status.NOT_FOUND, "Booking not found");
+    }
+
+    // Customers can only see their own bookings
+    if (user.role === UserRole.CUSTOMER && booking.customerId !== user.userId) {
+        throw new AppError(
+            status.FORBIDDEN,
+            "You do not have access to this booking",
+        );
+    }
+
+    return booking;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const bookingService = {
     createBooking,
     getAllBooking,
     getMyBooking,
+    getSingleBooking,
     updateBooking,
 };

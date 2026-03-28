@@ -102,18 +102,15 @@ const getVehicleById = async (id: string) => {
                 include: { category: true },
             },
             fuel: true,
-            reviews: {
+            bookings: {
                 include: {
-                    user: {
-                        select: {
-                            id: true,
-                            name: true,
-                            image: true,
-                        },
+                    customer: true,
+                    payments: true,
+                    review: {
+                        include: { user: true },
                     },
-                },
-                orderBy: { createdAt: "desc" },
-            },
+                }
+            }
         },
     });
 

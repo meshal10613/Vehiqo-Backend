@@ -40,10 +40,12 @@ export const uploadFileToCloudinary = async (
 
     const folder = extension === "pdf" ? "pdfs" : "images";
 
+
     return new Promise((resolve, reject) => {
         cloudinary.uploader
             .upload_stream(
                 {
+                    // resource_type: "auto",
                     resource_type: "auto",
                     public_id: `Vehiqo/${folder}/${uniqueName}`,
                     folder: `Vehiqo/${folder}`,

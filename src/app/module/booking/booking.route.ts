@@ -1,31 +1,46 @@
 import { Router } from "express";
-import { checkAuth } from "../../middleware/checkAuth";
 import { UserRole } from "../../../generated/prisma/enums";
+import { checkAuth } from "../../middleware/checkAuth";
 import { bookingController } from "./booking.controller";
-import { validateRequest } from "../../middleware/validateRequest";
-import { createBookingSchema, updateBookingSchema } from "./booking.validation";
 
 const router = Router();
 
+// ── Create ────────────────────────────────────────────────────────────────────
+// Validation + schema selection happens inside the controller, not here.
+// This keeps the route file thin and avoids duplicating the role-switch logic.
 router.post(
     "/",
     checkAuth(UserRole.CUSTOMER),
-    validateRequest(createBookingSchema),
     bookingController.createBooking,
 );
 
-router.get("/", checkAuth(UserRole.ADMIN), bookingController.getAllBooking);
+// ── Read (admin) ──────────────────────────────────────────────────────────────
+router.get(
+    "/",
+    checkAuth(UserRole.ADMIN),
+    bookingController.getAllBooking,
+);
 
+// ── Read (customer — own bookings) ────────────────────────────────────────────
 router.get(
     "/my-booking",
     checkAuth(UserRole.CUSTOMER),
     bookingController.getMyBooking,
 );
 
+// ── Read single ───────────────────────────────────────────────────────────────
+// Accessible to both roles; ownership check is enforced in the service.
+router.get(
+    "/:id",
+    checkAuth(UserRole.CUSTOMER, UserRole.ADMIN),
+    bookingController.getSingleBooking,
+);
+
+// ── Update ────────────────────────────────────────────────────────────────────
+// Role-based schema selection happens inside the controller.
 router.patch(
     "/:id",
     checkAuth(UserRole.CUSTOMER, UserRole.ADMIN),
-    validateRequest(updateBookingSchema),
     bookingController.updateBooking,
 );
 

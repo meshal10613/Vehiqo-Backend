@@ -9,20 +9,24 @@ const router = Router();
 
 router.post(
     "/",
-    checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
+    checkAuth(UserRole.CUSTOMER),
     validateRequest(createReviewSchema),
     reviewController.createReview,
 );
 
 router.get("/", reviewController.getAllReviews);
 
-router.get("/vehicle/:vehicleId", reviewController.getReviewsByVehicleId);
+router.get(
+    "/my-review",
+    checkAuth(UserRole.CUSTOMER),
+    reviewController.getMyReviews,
+);
 
 router.get("/:id", reviewController.getReviewById);
 
 router.patch(
     "/:id",
-    checkAuth(UserRole.ADMIN, UserRole.CUSTOMER),
+    checkAuth(UserRole.CUSTOMER),
     validateRequest(updateReviewSchema),
     reviewController.updateReview,
 );

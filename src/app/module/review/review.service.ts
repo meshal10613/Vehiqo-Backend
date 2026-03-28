@@ -5,22 +5,30 @@ import {
     ICreateReviewPayload,
     IUpdateReviewPayload,
 } from "./review.validation";
+import { IRequestUser } from "../../interface/requestUser.interface";
+import { IQueryParams } from "../../interface/query.interface";
+import { QueryBuilder } from "../../utils/QueryBuilder";
+import { Prisma, Review, UserRole } from "../../../generated/prisma/client";
+import {
+    reviewFilterableFields,
+    reviewSearchableFields,
+} from "./review.constant";
 
 const createReview = async (userId: string, payload: ICreateReviewPayload) => {
     // Check vehicle exists
-    const vehicle = await prisma.vehicle.findUnique({
-        where: { id: payload.vehicleId },
+    const booking = await prisma.booking.findUnique({
+        where: { id: payload.bookingId },
     });
 
-    if (!vehicle) {
-        throw new AppError(status.NOT_FOUND, "Vehicle not found");
+    if (!booking) {
+        throw new AppError(status.NOT_FOUND, "Booking not found");
     }
 
     // Check user has not already reviewed this vehicle
     const alreadyReviewed = await prisma.review.findUnique({
         where: {
-            vehicleId_userId: {
-                vehicleId: vehicle.id,
+            bookingId_userId: {
+                bookingId: booking.id,
                 userId,
             },
         },
@@ -29,7 +37,7 @@ const createReview = async (userId: string, payload: ICreateReviewPayload) => {
     if (alreadyReviewed) {
         throw new AppError(
             status.BAD_REQUEST,
-            "You have already reviewed this vehicle",
+            "You have already reviewed this Booking",
         );
     }
 
@@ -39,72 +47,77 @@ const createReview = async (userId: string, payload: ICreateReviewPayload) => {
             userId,
         },
         include: {
-            user: {
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
+            user: true,
+            booking: {
+                include: {
+                    vehicle: true,
                 },
-            },
-            vehicle: {
-                select: {
-                    id: true,
-                    brand: true,
-                    model: true,
-                },
-            },
+            }
         },
     });
 
     return result;
 };
 
-const getAllReviews = async () => {
-    const result = await prisma.review.findMany({
-        include: {
-            user: {
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                },
-            },
-            vehicle: {
-                select: {
-                    id: true,
-                    brand: true,
-                    model: true,
-                },
-            },
-        },
-        orderBy: { createdAt: "desc" },
+const getAllReviews = async (query: IQueryParams) => {
+    const queryBuilder = new QueryBuilder<
+        Review,
+        Prisma.ReviewWhereInput,
+        Prisma.ReviewInclude
+    >(prisma.review, query, {
+        searchableFields: reviewSearchableFields,
+        filterableFields: reviewFilterableFields,
     });
+
+    const result = await queryBuilder
+        .search()
+        .filter()
+        .include({
+            user: true,
+            booking: {
+                include: {
+                    vehicle: true,
+                },
+            },
+        })
+        // .dynamicInclude(doctorIncludeConfig)
+        .paginate()
+        .sort()
+        .fields()
+        .execute();
 
     return result;
 };
 
-const getReviewsByVehicleId = async (vehicleId: string) => {
-    const vehicle = await prisma.vehicle.findUnique({
-        where: { id: vehicleId },
+const getMyReviews = async (user: IRequestUser, query: IQueryParams) => {
+    const queryBuilder = new QueryBuilder<
+        Review,
+        Prisma.ReviewWhereInput,
+        Prisma.ReviewInclude
+    >(prisma.review, query, {
+        searchableFields: reviewSearchableFields,
+        filterableFields: reviewFilterableFields,
     });
 
-    if (!vehicle) {
-        throw new AppError(status.NOT_FOUND, "Vehicle not found");
-    }
-
-    const result = await prisma.review.findMany({
-        where: { vehicleId },
-        include: {
-            user: {
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
+    const result = await queryBuilder
+        .search()
+        .filter()
+        .where({
+            userId: user.userId,
+        })
+        .include({
+            user: true,
+            booking: {
+                include: {
+                    vehicle: true,
                 },
             },
-        },
-        orderBy: { createdAt: "desc" },
-    });
+        })
+        // .dynamicInclude(doctorIncludeConfig)
+        .paginate()
+        .sort()
+        .fields()
+        .execute();
 
     return result;
 };
@@ -113,18 +126,10 @@ const getReviewById = async (id: string) => {
     const result = await prisma.review.findUnique({
         where: { id },
         include: {
-            user: {
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                },
-            },
-            vehicle: {
-                select: {
-                    id: true,
-                    brand: true,
-                    model: true,
+            user: true,
+            booking: {
+                include: {
+                    vehicle: true,
                 },
             },
         },
@@ -162,20 +167,12 @@ const updateReview = async (
         where: { id },
         data: payload,
         include: {
-            user: {
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                },
-            },
-            vehicle: {
-                select: {
-                    id: true,
-                    brand: true,
-                    model: true,
-                },
-            },
+            user: true,
+            booking: {
+                include: {
+                    vehicle: true,
+                }
+            }
         },
     });
 
@@ -191,8 +188,8 @@ const deleteReview = async (id: string, userId: string) => {
         throw new AppError(status.NOT_FOUND, "Review not found");
     }
 
-    // Only the owner can delete their review
-    if (isExist.userId !== userId) {
+    // Only the owner & admin can delete their review
+    if (isExist.userId !== userId && isExist.userId === UserRole.ADMIN) {
         throw new AppError(
             status.FORBIDDEN,
             "You are not allowed to delete this review",
@@ -207,7 +204,7 @@ const deleteReview = async (id: string, userId: string) => {
 export const reviewService = {
     createReview,
     getAllReviews,
-    getReviewsByVehicleId,
+    getMyReviews,
     getReviewById,
     updateReview,
     deleteReview,

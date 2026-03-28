@@ -8,6 +8,7 @@ import { vehicleRoutes } from "../module/vehicle/vehicle.route";
 import { reviewRoutes } from "../module/review/review.route";
 import { bookingRoutes } from "../module/booking/booking.route";
 import { statsRoutes } from "../module/stats/stats.route";
+import { paymentRoutes } from "../module/payment/payment.route";
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use("/vehicle-category", vehicleCategoryRoutes);
 router.use("/vehicle-type", vehicleTypeRoutes);
 router.use("/vehicle", vehicleRoutes);
 router.use("/booking", bookingRoutes);
+router.use("/payment", paymentRoutes);
 router.use("/review", reviewRoutes);
 
 export const IndexRoutes = router;

@@ -49,7 +49,6 @@ const getAllVehicleTypes = async (query: IQueryParams) => {
             vehicles: {
                 include: {
                     bookings: true,
-                    reviews: true,
                 },
             },
         })

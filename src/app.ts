@@ -9,12 +9,15 @@ import "./app/cron/booking.cron";
 import path from "path";
 import qs from "qs";
 import { envVars } from "./app/config/env";
+import { paymentController } from "./app/module/payment/payment.controller";
 
 const app: Application = express();
 app.set("query parser", (str: string) => qs.parse(str));
 
 app.set("view engine", "ejs");
 app.set("views", path.resolve(process.cwd(), `src/app/templates`));
+
+app.post("/webhook", express.raw({ type: "application/json" }), paymentController.handleWebhook)
 
 app.use(
     cors({
@@ -26,7 +29,8 @@ app.use(
         ],
         credentials: true,
         methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-        allowedHeaders: ["Content-Type", "Authorization"],
+        // allowedHeaders: ["Content-Type", "Authorization"],
+        allowedHeaders: ["*"], //? 🔥 allow all headers
     }),
 );
 

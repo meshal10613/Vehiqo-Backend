@@ -6,5 +6,6 @@ import { statsController } from "./stats.controller";
 const router = Router();
 
 router.get("/", checkAuth(UserRole.ADMIN, UserRole.CUSTOMER), statsController.getStats);
+router.get("/public", statsController.getPublicStats);
 
 export const statsRoutes = router;

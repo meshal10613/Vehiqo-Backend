@@ -26,5 +26,4 @@ model Vehicle {
     updatedAt DateTime @updatedAt
 
     bookings Booking[]
-    reviews Review[]
 }

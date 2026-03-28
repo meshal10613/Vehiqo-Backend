@@ -1,6 +1,3 @@
-// ── 1. Create Stripe Checkout Session ────────────────────────────────────────
-// Following your previous project's pattern — checkout session instead of
-
 import status from "http-status";
 import AppError from "../../errorHelper/AppError";
 import { prisma } from "../../lib/prisma";
@@ -9,6 +6,7 @@ import {
     PaymentMethod,
     PaymentStatus,
     PaymentType,
+    UserRole,
 } from "../../../generated/prisma/enums";
 import { stripe } from "../../config/stripe";
 import Stripe from "stripe";
@@ -22,8 +20,21 @@ import {
     paymentFilterableFields,
     paymentSearchableFields,
 } from "./payment.constant";
+import { IRequestUser } from "../../interface/requestUser.interface";
 
-const createAdvancePaymentSession = async (bookingId: string) => {
+// ─────────────────────────────────────────────────────────────────────────────
+// createAdvancePaymentSession
+// ─────────────────────────────────────────────────────────────────────────────
+// Creates a Stripe Checkout session for the advance payment.
+// The booking stays PENDING until the webhook confirms — the vehicle is not
+// locked yet. A PENDING Payment record is created now so we have an ID to
+// embed in Stripe metadata and correlate later in the webhook.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const createAdvancePaymentSession = async (
+    bookingId: string,
+    user: IRequestUser,
+) => {
     const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: { customer: true, vehicle: true },
@@ -33,15 +44,24 @@ const createAdvancePaymentSession = async (bookingId: string) => {
         throw new AppError(status.NOT_FOUND, "Booking not found");
     }
 
-    if (booking.status !== BookingStatus.PENDING) {
+    // Customers can only initiate payment for their own booking
+    if (user.role === UserRole.CUSTOMER && booking.customerId !== user.userId) {
         throw new AppError(
-            status.CONFLICT,
-            "Advance payment already initiated or completed for this booking",
+            status.FORBIDDEN,
+            "You do not have access to this booking",
         );
     }
 
-    // Create a pending Payment record first so we have an ID for metadata
-    // stripeEventId is null until the webhook confirms it
+    if (booking.status !== BookingStatus.PENDING) {
+        throw new AppError(
+            status.CONFLICT,
+            "Advance payment is already initiated or completed for this booking",
+        );
+    }
+
+    // Create a PENDING Payment record before the Stripe session so we have a
+    // paymentId to embed in the session metadata. The record flips to PAID
+    // (or FAILED) in the webhook handler.
     const payment = await prisma.payment.create({
         data: {
             type: PaymentType.ADVANCE,
@@ -52,7 +72,6 @@ const createAdvancePaymentSession = async (bookingId: string) => {
         },
     });
 
-    // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         mode: "payment",
@@ -70,10 +89,95 @@ const createAdvancePaymentSession = async (bookingId: string) => {
                 },
             },
         ],
-        // Metadata links the session back to our records in the webhook
         metadata: {
             bookingId,
             paymentId: payment.id,
+            paymentType: PaymentType.ADVANCE,
+        },
+        success_url: `${process.env.FRONTEND_URL}/bookings/${bookingId}/payment-success`,
+        cancel_url: `${process.env.FRONTEND_URL}/bookings/${bookingId}/payment-failed`,
+    });
+
+    return {
+        sessionId: session.id,
+        sessionUrl: session.url,
+        paymentId: payment.id,
+    };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createRemainingPaymentSession
+// ─────────────────────────────────────────────────────────────────────────────
+// Called after admin processes the vehicle return and the final bill is
+// computed. Only applicable when remainingDue > 0.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const createRemainingPaymentSession = async (
+    bookingId: string,
+    user: IRequestUser,
+) => {
+    const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: { customer: true, vehicle: true },
+    });
+
+    if (!booking) {
+        throw new AppError(status.NOT_FOUND, "Booking not found");
+    }
+
+    if (user.role === UserRole.CUSTOMER && booking.customerId !== user.userId) {
+        throw new AppError(
+            status.FORBIDDEN,
+            "You do not have access to this booking",
+        );
+    }
+
+    // Remaining payment only makes sense after the vehicle is returned
+    if (booking.status !== BookingStatus.RETURNED) {
+        throw new AppError(
+            status.CONFLICT,
+            "Remaining payment can only be initiated after the vehicle has been returned",
+        );
+    }
+
+    if (booking.remainingDue <= 0) {
+        throw new AppError(
+            status.CONFLICT,
+            "No remaining balance due for this booking",
+        );
+    }
+
+    const payment = await prisma.payment.create({
+        data: {
+            type: PaymentType.FINAL,
+            amount: booking.remainingDue,
+            method: PaymentMethod.STRIPE,
+            status: PaymentStatus.PENDING,
+            bookingId,
+        },
+    });
+
+    const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "payment",
+        customer_email: booking.customer.email,
+        line_items: [
+            {
+                quantity: 1,
+                price_data: {
+                    currency: "bdt",
+                    unit_amount: Math.round(booking.remainingDue * 100),
+                    product_data: {
+                        name: `Final Payment — ${booking.vehicle.brand} ${booking.vehicle.model} ${booking.vehicle.year}`,
+                        description: `Remaining balance for booking ending ${booking.endDate.toLocaleDateString()}`,
+                    },
+                },
+            },
+        ],
+        metadata: {
+            bookingId,
+            paymentId: payment.id,
+            paymentType: PaymentType.FINAL,
         },
         success_url: `${process.env.FRONTEND_URL}/bookings/${bookingId}/payment-success`,
         cancel_url: `${process.env.FRONTEND_URL}/bookings/${bookingId}/payment-cancel`,
@@ -81,38 +185,47 @@ const createAdvancePaymentSession = async (bookingId: string) => {
 
     return {
         sessionId: session.id,
-        sessionUrl: session.url, // redirect customer to this URL
+        sessionUrl: session.url,
         paymentId: payment.id,
     };
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// handleStripeWebhookEvent
+// ─────────────────────────────────────────────────────────────────────────────
+// Idempotent — guarded by stripeEventId @unique on the Payment model.
+// If Stripe retries the same event, the findFirst check exits early.
+//
+// checkout.session.completed handles both ADVANCE and REMAINING payment types
+// by reading paymentType from session metadata.
+// ─────────────────────────────────────────────────────────────────────────────
+
 const handleStripeWebhookEvent = async (event: Stripe.Event) => {
     // ── Idempotency guard ─────────────────────────────────────────────────────
-    // Stripe may send the same event multiple times (retries on non-2xx).
-    // If we've already processed this event ID, skip silently.
     const existingPayment = await prisma.payment.findFirst({
         where: { stripeEventId: event.id },
     });
 
     if (existingPayment) {
-        console.log(`[WEBHOOK] Event ${event.id} already processed. Skipping.`);
+        console.log(`[WEBHOOK] Event ${event.id} already processed — skipping`);
         return { message: `Event ${event.id} already processed` };
     }
 
     switch (event.type) {
-        // ── Payment succeeded ─────────────────────────────────────────────────
+        // ── Checkout succeeded ────────────────────────────────────────────────
         case "checkout.session.completed": {
             const session = event.data.object as Stripe.Checkout.Session;
-
             const bookingId = session.metadata?.bookingId;
             const paymentId = session.metadata?.paymentId;
+            const paymentType = session.metadata?.paymentType as
+                | PaymentType
+                | undefined;
 
-            if (!bookingId || !paymentId) {
+            if (!bookingId || !paymentId || !paymentType) {
                 console.error("[WEBHOOK] Missing metadata in event", event.id);
                 return { message: "Missing metadata" };
             }
 
-            // Fetch full booking for invoice generation
             const booking = await prisma.booking.findUnique({
                 where: { id: bookingId },
                 include: { customer: true, vehicle: true },
@@ -125,29 +238,27 @@ const handleStripeWebhookEvent = async (event: Stripe.Event) => {
 
             const isPaid = session.payment_status === "paid";
 
-            let invoiceUrl: string | null = null;
-            let pdfBuffer: Buffer | null = null;
+            // ── Generate one transaction ID — reused for both PDF and DB ──────
+            // Previously generateTransactionId() was called twice, producing
+            // two different IDs: one embedded in the PDF and one stored in the
+            // DB. They must match so the invoice is auditable.
+            const transactionId = generateTransactionId();
 
-            // ── Generate invoice PDF if payment succeeded ─────────────────────
+            let invoiceUrl: string | null = null;
+
             if (isPaid) {
                 try {
-                    const transactionId = generateTransactionId();
                     const paidAt = new Date();
 
-                    pdfBuffer = await generateInvoicePdf({
-                        transactionId,
-                        paymentType: PaymentType.ADVANCE,
+                    const pdfBuffer = await generateInvoicePdf({
+                        transactionId, // same ID goes on the PDF
+                        paymentType,
                         paymentMethod: PaymentMethod.STRIPE,
                         paymentStatus: PaymentStatus.PAID,
                         paidAt,
                         customerName: booking.customer.name,
                         customerEmail: booking.customer.email,
-                        vehicleName:
-                            booking.vehicle.brand +
-                            " " +
-                            booking.vehicle.model +
-                            " " +
-                            booking.vehicle.year,
+                        vehicleName: `${booking.vehicle.brand} ${booking.vehicle.model} ${booking.vehicle.year}`,
                         licensePlate: booking.vehicle.plateNo,
                         startDate: booking.startDate,
                         endDate: booking.endDate,
@@ -164,19 +275,18 @@ const handleStripeWebhookEvent = async (event: Stripe.Event) => {
                         remainingDue: booking.remainingDue,
                     });
 
-                    // Upload to Cloudinary using your existing config util
                     const cloudinaryResponse = await uploadFileToCloudinary(
                         pdfBuffer,
                         `vehicle-rental/invoices/invoice-${paymentId}-${Date.now()}.pdf`,
                     );
 
                     invoiceUrl = cloudinaryResponse?.secure_url ?? null;
-
                     console.log(
                         `[WEBHOOK] Invoice uploaded for payment ${paymentId}`,
                     );
                 } catch (pdfError) {
-                    // PDF failure should NOT block the payment from being recorded
+                    // PDF failure must NOT block the payment from being recorded.
+                    // The customer has paid; we owe them a confirmed booking.
                     console.error(
                         "[WEBHOOK] Invoice generation failed:",
                         pdfError,
@@ -184,7 +294,16 @@ const handleStripeWebhookEvent = async (event: Stripe.Event) => {
                 }
             }
 
-            // ── Persist payment + booking status atomically ───────────────────
+            // ── Determine next booking status based on payment type ────────────
+            // ADVANCE paid  → ADVANCE_PAID (vehicle becomes BOOKED in same tx)
+            // REMAINING paid → COMPLETED   (vehicle returns to AVAILABLE)
+            const nextBookingStatus = isPaid
+                ? paymentType === PaymentType.ADVANCE
+                    ? BookingStatus.ADVANCE_PAID
+                    : BookingStatus.COMPLETED
+                : booking.status; // leave unchanged on failure
+
+            // ── Persist atomically ────────────────────────────────────────────
             const result = await prisma.$transaction(async (tx) => {
                 const updatedPayment = await tx.payment.update({
                     where: { id: paymentId },
@@ -192,27 +311,39 @@ const handleStripeWebhookEvent = async (event: Stripe.Event) => {
                         status: isPaid
                             ? PaymentStatus.PAID
                             : PaymentStatus.FAILED,
-                        transactionId: generateTransactionId(),
+                        transactionId, // same ID that's printed on the invoice
                         invoiceUrl,
                         paidAt: isPaid ? new Date() : null,
-                        stripeEventId: event.id, // idempotency key
+                        stripeEventId: event.id,
                     },
                 });
 
                 const updatedBooking = await tx.booking.update({
                     where: { id: bookingId },
-                    data: {
-                        status: isPaid
-                            ? BookingStatus.ADVANCE_PAID
-                            : BookingStatus.PENDING, // stay PENDING on failure
-                    },
+                    data: { status: nextBookingStatus },
                 });
+
+                // When advance is paid, lock the vehicle so nobody else books it
+                if (isPaid && paymentType === PaymentType.ADVANCE) {
+                    await tx.vehicle.update({
+                        where: { id: booking.vehicleId },
+                        data: { status: "BOOKED" },
+                    });
+                }
+
+                // When final payment is done, release the vehicle
+                if (isPaid && paymentType === PaymentType.FINAL) {
+                    await tx.vehicle.update({
+                        where: { id: booking.vehicleId },
+                        data: { status: "AVAILABLE" },
+                    });
+                }
 
                 return { updatedPayment, updatedBooking };
             });
 
             console.log(
-                `[WEBHOOK] Payment ${session.payment_status} for booking ${bookingId}`,
+                `[WEBHOOK] ${paymentType} payment ${session.payment_status} for booking ${bookingId}`,
             );
             return result;
         }
@@ -247,17 +378,25 @@ const handleStripeWebhookEvent = async (event: Stripe.Event) => {
             console.log(`[WEBHOOK] Unhandled event type: ${event.type}`);
     }
 
-    return { message: `Webhook event ${event.id} processed successfully` };
+    return { message: `Webhook event ${event.id} processed` };
 };
 
-const getPaymentsByBooking = async (bookingId: string) => {
+const getPaymentsByBooking = async (bookingId: string, user: IRequestUser) => {
     const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
-        select: { id: true },
+        select: { id: true, customerId: true },
     });
 
     if (!booking) {
         throw new AppError(status.NOT_FOUND, "Booking not found");
+    }
+
+    // Ownership check — admin bypasses this
+    if (user.role === UserRole.CUSTOMER && booking.customerId !== user.userId) {
+        throw new AppError(
+            status.FORBIDDEN,
+            "You do not have access to this booking's payments",
+        );
     }
 
     return prisma.payment.findMany({
@@ -266,7 +405,7 @@ const getPaymentsByBooking = async (bookingId: string) => {
     });
 };
 
-const getPaymentById = async (paymentId: string) => {
+const getPaymentById = async (paymentId: string, user: IRequestUser) => {
     const payment = await prisma.payment.findUnique({
         where: { id: paymentId },
         include: { booking: true },
@@ -276,25 +415,34 @@ const getPaymentById = async (paymentId: string) => {
         throw new AppError(status.NOT_FOUND, "Payment not found");
     }
 
+    // Customers can only see their own payments
+    if (
+        user.role === UserRole.CUSTOMER &&
+        payment.booking.customerId !== user.userId
+    ) {
+        throw new AppError(
+            status.FORBIDDEN,
+            "You do not have access to this payment",
+        );
+    }
+
     return payment;
 };
 
-const getAllPayments = async (query: IQueryParams) => {
+const getMyPayments = async (user: IRequestUser, query: IQueryParams) => {
     const queryBuilder = new QueryBuilder<
         Payment,
         Prisma.PaymentWhereInput,
         Prisma.PaymentInclude
-    >(prisma.user, query, {
+    >(prisma.payment, query, {
         searchableFields: paymentSearchableFields,
         filterableFields: paymentFilterableFields,
     });
 
-    const result = await queryBuilder
+    return queryBuilder
         .search()
         .filter()
-        // .where({
-        // 	isDeleted: false,
-        // })
+        .where({ booking: { customerId: user.userId } })
         .include({
             booking: {
                 include: {
@@ -303,19 +451,59 @@ const getAllPayments = async (query: IQueryParams) => {
                 },
             },
         })
-        // .dynamicInclude(doctorIncludeConfig)
         .paginate()
         .sort()
         .fields()
         .execute();
+};
 
-    return result;
+const getAllPayments = async (query: IQueryParams) => {
+    // Fixed: was prisma.user — must be prisma.payment
+    const queryBuilder = new QueryBuilder<
+        Payment,
+        Prisma.PaymentWhereInput,
+        Prisma.PaymentInclude
+    >(prisma.payment, query, {
+        searchableFields: paymentSearchableFields,
+        filterableFields: paymentFilterableFields,
+    });
+
+    return queryBuilder
+        .search()
+        .filter()
+        .include({
+            booking: {
+                include: {
+                    customer: true,
+                    vehicle: true,
+                },
+            },
+        })
+        .paginate()
+        .sort()
+        .fields()
+        .execute();
+};
+
+const deletePayment = async (paymentId: string) => {
+    const payment = await prisma.payment.findUnique({
+        where: { id: paymentId },
+    });
+
+    if (!payment) {
+        throw new AppError(status.NOT_FOUND, "Payment not found");
+    }
+
+    return await prisma.payment.delete({ where: { id: paymentId } });
 };
 
 export const paymentService = {
     createAdvancePaymentSession,
+    createRemainingPaymentSession,
     handleStripeWebhookEvent,
     getPaymentsByBooking,
     getPaymentById,
+    getMyPayments,
     getAllPayments,
+    deletePayment,
 };

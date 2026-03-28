@@ -132,6 +132,7 @@ npm run dev
 | `POST` | `/verify-email` | Public | Verify email address |
 | `POST` | `/forget-password` | Public | Send password reset email |
 | `POST` | `/reset-password` | Public | Reset password via token |
+| `DELETE` | `/delete-account/:id` | Admin | Delete Account by id |
 | `POST` | `/logout` | Auth | Logout and invalidate token |
 
 ---
@@ -141,6 +142,15 @@ npm run dev
 | Method | Endpoint | Access | Description |
 |--------|----------|--------|-------------|
 | `GET` | `/` | Admin | Get all users |
+
+
+---
+
+### 👤 Stats — `/stats`
+
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| `GET` | `/` | Admin / Customer | Get dashboard stats |
 
 ---
 

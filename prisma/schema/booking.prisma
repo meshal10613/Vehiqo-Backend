@@ -18,6 +18,13 @@ model Booking {
     remainingDue  Float
     notes         String?
 
+    fuelLevelPickup Float?
+    fuelLevelReturn Float?
+
+    cancelledAt        DateTime?
+    cancelledBy        String? //it will be customer/admin uuid
+    cancellationReason String?
+
     vehicleId String
     vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
@@ -25,9 +32,11 @@ model Booking {
     customer   User   @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
     payments Payment[]
+    review   Review?
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
+    reviewId  String?
 
     @@index([vehicleId])
     @@index([customerId])

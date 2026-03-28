@@ -2,6 +2,7 @@ import status from "http-status";
 import { catchAsync } from "../../shared/catchAsync";
 import { sendResponse } from "../../shared/sendResponse";
 import { reviewService } from "./review.service";
+import { IQueryParams } from "../../interface/query.interface";
 
 const createReview = catchAsync(async (req, res) => {
     const userId = req.user.userId;
@@ -16,25 +17,28 @@ const createReview = catchAsync(async (req, res) => {
 });
 
 const getAllReviews = catchAsync(async (req, res) => {
-    const result = await reviewService.getAllReviews();
+    const result = await reviewService.getAllReviews(req.query as IQueryParams);
 
     sendResponse(res, {
         httpStatusCode: status.OK,
         success: true,
         message: "Reviews retrieved successfully",
-        data: result,
+        data: result.data,
+        meta: result.meta,
     });
 });
 
-const getReviewsByVehicleId = catchAsync(async (req, res) => {
-    const { vehicleId } = req.params;
-    const result = await reviewService.getReviewsByVehicleId(vehicleId as string);
+const getMyReviews = catchAsync(async (req, res) => {
+    const user = req.user;
+    const query = req.query;
+    const result = await reviewService.getMyReviews(user, query as IQueryParams);
 
     sendResponse(res, {
         httpStatusCode: status.OK,
         success: true,
-        message: "Vehicle reviews retrieved successfully",
-        data: result,
+        message: "My reviews retrieved successfully",
+        data: result.data,
+        meta: result.meta,
     });
 });
 
@@ -79,7 +83,7 @@ const deleteReview = catchAsync(async (req, res) => {
 export const reviewController = {
     createReview,
     getAllReviews,
-    getReviewsByVehicleId,
+    getMyReviews,
     getReviewById,
     updateReview,
     deleteReview,

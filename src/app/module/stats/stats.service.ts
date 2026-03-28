@@ -214,6 +214,7 @@ const getCustomerStatsData = async (user: IRequestUser) => {
     const userId = user.userId;
 
     const [
+        fuelPrice,
         bookingStats,
         bookingCount,
 
@@ -226,6 +227,14 @@ const getCustomerStatsData = async (user: IRequestUser) => {
 
         reviewStats,
     ] = await Promise.all([
+        prisma.fuelPrice.findMany({
+            select: {
+                fuelType: true,
+                pricePerUnit: true,
+                unit: true,
+            },
+        }),
+
         prisma.booking.groupBy({
             by: ["status"],
             where: {
@@ -289,7 +298,7 @@ const getCustomerStatsData = async (user: IRequestUser) => {
         }),
         prisma.review.aggregate({
             where: {
-				userId: userId,
+                userId: userId,
             },
             _count: true,
         }),
@@ -305,6 +314,7 @@ const getCustomerStatsData = async (user: IRequestUser) => {
     const paymentMethodMap = mapCounts(paymentMethodStats, "method");
 
     return {
+        fuelPrice,
         booking: {
             total: bookingCount,
             status: {
@@ -351,4 +361,20 @@ const getCustomerStatsData = async (user: IRequestUser) => {
     };
 };
 
-export const statsService = { getStats };
+const getPublicStats = async () => {
+    const [vehicleType, vehicleCategory, vehicle, review] = await Promise.all([
+        prisma.vehicleType.count(),
+        prisma.vehicleCategory.count(),
+        prisma.vehicle.count(),
+        prisma.review.count(),
+    ]);
+
+    return {
+        vehicleType,
+        vehicleCategory,
+        vehicle,
+        review,
+    };
+};
+
+export const statsService = { getStats, getPublicStats };

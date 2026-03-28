@@ -5,10 +5,15 @@ export const vehicleFilterableFields = [
     "plateNo",
     "transmission",
     "fuelType",
-	"status",
+    "status",
     "vehicleType.name",
     "vehicleType.category.name",
-    "vehicleType.categoryId"
+    "vehicleType.categoryId",
+    "pricePerDay",
 ];
 
-export const vehicleSearchableFields = ["brand", "model", "year", "plateNo"];
+export const vehicleSearchableFields = [
+    "brand",
+    "model",
+    "plateNo",
+];
