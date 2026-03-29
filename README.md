@@ -18,7 +18,7 @@ Fuel pricing is managed per fuel type (Petrol, Octane, Diesel, Electric, Hybrid,
 
 ## 🌐 Live API
 
-**Base URL:** [https://vehiqo-backend.railway.app/api/v1](https://vehiqo-backend.railway.app/api/v1)
+**Base URL:** [https://vehiqo-backend.vercel.app](https://vehiqo-backend.vercel.app/)
 
 ---
 
