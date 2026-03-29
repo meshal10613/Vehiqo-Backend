@@ -8,6 +8,7 @@
         "test": "echo \"Error: no test specified\" && exit 1",
         "start": "node dist/server.js",
         "build": "prisma generate && tsup src/server.ts --format esm --platform node --target node20 --outDir dist --external pg-native",
+        "build:tsup": "tsup",
         "dev": "tsx --watch src/server.ts",
         "lint": "eslint ./src/**/*",
         "migrate": "prisma migrate dev",
@@ -20,7 +21,7 @@
     "keywords": [],
     "author": "",
     "license": "ISC",
-    "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",
+    "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@types/cookie-parser": "^1.4.10",
@@ -67,6 +68,7 @@
         "qs": "^6.15.0",
         "stripe": "^20.4.1",
         "uuid": "^13.0.0",
+        "vercel": "^50.37.3",
         "zod": "^4.3.6"
     }
 }

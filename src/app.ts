@@ -17,7 +17,11 @@ app.set("query parser", (str: string) => qs.parse(str));
 app.set("view engine", "ejs");
 app.set("views", path.resolve(process.cwd(), `src/app/templates`));
 
-app.post("/webhook", express.raw({ type: "application/json" }), paymentController.handleWebhook)
+app.post(
+    "/webhook",
+    express.raw({ type: "application/json" }),
+    paymentController.handleWebhook,
+);
 
 app.use(
     cors({
@@ -44,7 +48,10 @@ app.use(cookieParser());
 app.use("/api/v1", IndexRoutes);
 
 app.get("/", async (req: Request, res: Response) => {
-    res.send("Hello World!");
+    res.status(200).json({
+        success: true,
+        message: "Vehiqo API is running",
+    });
 });
 
 app.use(globalErrorHandler);

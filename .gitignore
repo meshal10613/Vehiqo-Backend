@@ -7,3 +7,5 @@ dist
 pnpm-lock.yaml
 .vercel
 /generated/prisma
+
+.vercel
