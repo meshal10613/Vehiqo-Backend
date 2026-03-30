@@ -52,6 +52,7 @@ const getAdminStatsData = async () => {
         paymentTypeStats,
         paymentMethodStats,
         paymentCount,
+        totalRevenue,
     ] = await Promise.all([
         prisma.fuelPrice.findMany({
             select: {
@@ -110,6 +111,14 @@ const getAdminStatsData = async () => {
         }),
 
         prisma.payment.count(),
+        prisma.payment.aggregate({
+            where: {
+                status: PaymentStatus.PAID,
+            },
+            _sum: {
+                amount: true,
+            },
+        }),
     ]);
 
     // helper to map groupBy → object
@@ -183,6 +192,7 @@ const getAdminStatsData = async () => {
 
         payment: {
             total: paymentCount,
+            totalRevenue: totalRevenue._sum.amount || 0,
 
             status: {
                 unpaid: paymentStatusMap.UNPAID || 0,
@@ -362,11 +372,17 @@ const getCustomerStatsData = async (user: IRequestUser) => {
 };
 
 const getPublicStats = async () => {
-    const [vehicleType, vehicleCategory, vehicle, review] = await Promise.all([
+    const [vehicleType, vehicleCategory, vehicle, review, rating] = await Promise.all([
         prisma.vehicleType.count(),
         prisma.vehicleCategory.count(),
         prisma.vehicle.count(),
         prisma.review.count(),
+        prisma.review.aggregate({
+            _avg: {
+                rating: true,
+            },
+            _count: true,
+        }),
     ]);
 
     return {
@@ -374,6 +390,7 @@ const getPublicStats = async () => {
         vehicleCategory,
         vehicle,
         review,
+        rating: parseFloat((rating._avg.rating ?? 0).toFixed(1)),
     };
 };
 
