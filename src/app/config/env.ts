@@ -25,6 +25,7 @@ interface EnvConfig {
         SMTP_HOST: string;
         SMTP_PORT: string;
         SMTP_FROM: string;
+        RESEND_API_KEY: string;
     };
     CLOUDINARY: {
         CLOUDE_NAME: string;
@@ -61,6 +62,7 @@ const loadEnvVariables = (): EnvConfig => {
         "EMAIL_SENDER_SMTP_HOST",
         "EMAIL_SENDER_SMTP_PORT",
         "EMAIL_SENDER_SMTP_FROM",
+        "RESEND_API_KEY",
         "CLOUDINARY_CLOUDE_NAME",
         "CLOUDINARY_API_KEY",
         "CLOUDINARY_API_SECRET",
@@ -102,6 +104,7 @@ const loadEnvVariables = (): EnvConfig => {
             SMTP_HOST: process.env.EMAIL_SENDER_SMTP_HOST as string,
             SMTP_PORT: process.env.EMAIL_SENDER_SMTP_PORT as string,
             SMTP_FROM: process.env.EMAIL_SENDER_SMTP_FROM as string,
+            RESEND_API_KEY: process.env.RESEND_API_KEY as string
         },
         CLOUDINARY: {
             CLOUDE_NAME: process.env.CLOUDINARY_CLOUDE_NAME as string,

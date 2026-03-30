@@ -40,26 +40,35 @@ export const auth = betterAuth({
                         return;
                     }
 
-                    if (user && user.role === UserRole.ADMIN) {
-                        console.log(
-                            chalk.green(
-                                `User with email ${email} is a admin. Skipping sending verification OTP.`,
-                            ),
-                        );
-                        return;
-                    }
+                    await prisma.user.update({
+                        where: {
+                            email,
+                        },
+                        data: {
+                            emailVerified: true,
+                        },
+                    });
 
-                    if (user && !user.emailVerified) {
-                        sendEmail({
-                            to: email,
-                            subject: "Verify your email",
-                            templateName: "otp",
-                            templateData: {
-                                name: user.name,
-                                otp,
-                            },
-                        });
-                    }
+                    // if (user && user.role === UserRole.ADMIN) {
+                    //     console.log(
+                    //         chalk.green(
+                    //             `User with email ${email} is a admin. Skipping sending verification OTP.`,
+                    //         ),
+                    //     );
+                    //     return;
+                    // }
+
+                    // if (user && !user.emailVerified) {
+                    //     sendEmail({
+                    //         to: email,
+                    //         subject: "Verify your email",
+                    //         templateName: "otp",
+                    //         templateData: {
+                    //             name: user.name,
+                    //             otp,
+                    //         },
+                    //     });
+                    // }
                 } else if (type === "forget-password") {
                     const user = await prisma.user.findUnique({
                         where: {

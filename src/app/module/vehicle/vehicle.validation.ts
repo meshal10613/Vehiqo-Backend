@@ -260,10 +260,6 @@ export const updateVehicleSchema = z
 /**
  * Payload Types
  */
-export type ICreateVehiclePayload = z.infer<typeof createVehicleSchema> & {
-    image?: string[];
-};
+export type ICreateVehiclePayload = z.infer<typeof createVehicleSchema>;
 
-export type IUpdateVehiclePayload = z.infer<typeof updateVehicleSchema> & {
-    image?: string[];
-};
+export type IUpdateVehiclePayload = z.infer<typeof updateVehicleSchema>;

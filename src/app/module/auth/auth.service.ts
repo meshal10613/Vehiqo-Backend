@@ -39,24 +39,33 @@ const registerUser = async (payload: IRegisterUserPayload) => {
         throw new AppError(status.BAD_REQUEST, "Failed to register user");
     }
 
+    const user = await prisma.user.update({
+        where: {
+            email,
+        },
+        data: {
+            emailVerified: true,
+        },
+    });
+
     const accessToken = tokenUtils.getAccessToken({
         userId: data.user.id,
         role: data.user.role,
         name: data.user.name,
         email: data.user.email,
-        emailVerified: data.user.emailVerified,
+        emailVerified: user.emailVerified,
     });
 
     const refreshToken = tokenUtils.getRefreshToken({
-        userId: data.user.id,
-        role: data.user.role,
-        name: data.user.name,
-        email: data.user.email,
-        emailVerified: data.user.emailVerified,
+        userId: user.id,
+        role: user.role,
+        name: user.name,
+        email: user.email,
+        emailVerified: user.emailVerified,
     });
 
     return {
-        ...data,
+        ...user,
         accessToken,
         refreshToken,
     };
