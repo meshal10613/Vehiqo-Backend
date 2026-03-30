@@ -7,8 +7,7 @@
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
         "start": "node dist/server.js",
-        "build": "prisma generate && tsup src/server.ts --format esm --platform node --target node20 --outDir dist --external pg-native",
-        "build:tsup": "tsup",
+        "build": "tsup",
         "dev": "tsx --watch src/server.ts",
         "lint": "eslint ./src/**/*",
         "migrate": "prisma migrate dev",

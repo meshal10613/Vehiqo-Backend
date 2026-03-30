@@ -164,6 +164,7 @@ const getMyBooking = async (user: IRequestUser, query: IQueryParams) => {
             vehicle: true,
             customer: true,
             payments: true,
+            review: true,
         })
         // .dynamicInclude(doctorIncludeConfig)
         .paginate()
